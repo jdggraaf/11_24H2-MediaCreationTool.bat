@@ -169,7 +169,7 @@ goto process ::# windows 11 : usability and ui downgrade, and even more ChrEdge 
 :choice-14
 set "VER=19045" & set "VID=22H2" & set "CB=19045.3803.231204-0204.22h2_release_svc_refresh" & set "CT=2023/12/" & set "CC=1.4.1"
 set "CAB=https://download.microsoft.com/download/7/9/c/79cbc22a-0eea-4a0d-89c0-054a1b3aa8e0/products.cab"
-set "EXE=https://download.microsoft.com/download/9/e/a/9eac306f-d134-4609-9c58-35d1638c2363/MediaCreationTool22H2.exe"
+set "EXE=https://download.microsoft.com/download/9/e/a/9eac306f-d134-4609-9c58-35d1638c2363/MediaCreationTool_22H2.exe"
 goto process ::# refreshed 19041 base with integrated 22H2 enablement package - current
 
 :choice-13
