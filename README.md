@@ -227,9 +227,26 @@ Fork changelog
 
 Known broken
 ------------
-- **Choices `1507` and `1511` cannot work.** Their only catalog source is `wscont.apps.microsoft.com`, which no
-  longer resolves (NXDOMAIN). The script downloads their MCT executable fine, then fails on the catalog after
-  working through every download method. There is no replacement URL; these two entries are effectively dead.
+All 40 source urls in the version table were probed on **2026-07-29**. Five are dead, taking five of the nineteen
+menu entries with them. Microsoft retired the hosts/paths; there are no replacement urls, so these are documented
+rather than fixed. Everything from `1703` onward works, apart from `1803` / `1809`.
+
+| Choice | Dead source | Why |
+| --- | --- | --- |
+| `1507` | catalog XML | `wscont.apps.microsoft.com` no longer resolves (NXDOMAIN) |
+| `1511` | catalog XML | same host |
+| `1607` | catalog CAB | same host |
+| `1803` | MCT executable | `software-download.microsoft.com/download/pr/MediaCreationTool1803.exe` → HTTP 400 |
+| `1809` | MCT executable | `.../MediaCreationTool1809.exe` → HTTP 400 |
+
+Failure mode is poor: `DOWNLOAD` tries four methods across both http and https before giving up, so the script
+appears to hang for a while, then shows its ERROR banner and waits on a keypress. If you pick one of these five,
+that is why.
+
+The `bypass11/` folder is a hand-maintained snapshot of the generated files and has drifted from what the script
+now produces: `bypass11/auto.cmd` is missing the `HwReqChk` write, and `bypass11/AutoUnattend.xml` has neither
+`HwReqChk` nor the `MoSetup` entry. Use the files the script generates, not these, if you want the current
+bypass set.
 - Media built by this script carries a deliberate Windows Update pin (`TargetReleaseVersion` +
   `TargetReleaseVersionInfo=25H1`). `25H1` is **not a typo** — AveYo points the pin at a version that never
   existed to suppress the unsupported-hardware nag. Side effect: installed machines are not offered feature

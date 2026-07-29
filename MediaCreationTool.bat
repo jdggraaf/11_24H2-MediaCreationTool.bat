@@ -831,15 +831,6 @@ exit /b
 :reg_query [USAGE] call :reg_query "HKCU\Volatile Environment" Value variable
 (for /f "tokens=2*" %%R in ('reg query "%~1" /v "%~2" /se "|" %4 2^>nul') do set "%~3=%%S") & exit /b
 
-::# ================================================================================================================
-::# Convention for the powershell helper stubs below (WIM_INFO, MakeISO, FETCH_CAB, DOWNLOAD):
-::# each ends with `exit /b %errorcode%` - that is INTENTIONAL and must not be "corrected" to %errorlevel%.
-::# ERRORCODE is not a cmd variable, so it expands to nothing and the statement becomes a bare `exit /b`,
-::# which returns powershell's exit code. Writing %errorlevel% there would expand it BEFORE powershell runs
-::# (the whole `set ... & powershell ... & exit /b ...` line is expanded in one pass), returning a stale value.
-::# If you want it explicit, write a bare `exit /b` - never plain %errorlevel% on these single-line stubs.
-::# Do not put ::# comments BETWEEN a #:NAME:# marker pair either - that text is iex'd as powershell.
-::# ================================================================================================================
 #:WIM_INFO:# [PARAMS]: "file" [optional]Index or 0 = all  Output 0 = txt 1 = xml 2 = file.txt 3 = file.xml 4 = xml object
 set ^ #=;$f0=[io.file]::ReadAllText($env:0); $0=($f0-split '#[:]WIM_INFO[:]' ,3)[1]; $1=$env:1-replace'([`@$])','`$1'; iex($0+$1)
 set ^ #=& set "0=%~f0"& set 1=;WIM_INFO %*& powershell -nop -c "%#%"& exit /b %errorcode%
@@ -942,6 +933,16 @@ function WIM_INFO ($file = 'install.esd', $index = 0, $out = 0) { :info while ($
 
 '@; [io.file]::WriteAllText('AutoUnattend.xml', $text); #:generate_AutoUnattend_xml - to be used via boot.wim on 11
 
+::--------------------------------------------------------------------------------------------------------------------------------
+::# Conventions for the powershell helper stubs below (MakeISO, FETCH_CAB, DOWNLOAD, CHOICES, PRODUCTS_XML) and for
+::# the WIM_INFO stub embedded in the auto.cmd template above:
+::# 1. each ends with `exit /b %errorcode%` - INTENTIONAL, do not "correct" it to %errorlevel%. ERRORCODE is not a
+::#    cmd variable, so it expands to nothing and the line becomes a bare `exit /b`, returning powershell's code.
+::#    %errorlevel% would expand BEFORE powershell runs - the whole `set ... & powershell ... & exit /b` line is
+::#    expanded in one pass - and would return a stale value. Write a bare `exit /b` if you want it explicit.
+::# 2. never put ::# comments BETWEEN a #:NAME:# marker pair - everything there is iex'd as powershell.
+::# 3. never edit between `:generate_auto_cmd` / `:generate_AutoUnattend_xml` and their closing '@ unless you mean
+::#    to change the generated file - that whole region is a here-string written verbatim onto the created media.
 ::--------------------------------------------------------------------------------------------------------------------------------
 #:MakeISO:#  [PARAMS] "directory" "file.iso" [optional]"label"
 set ^ #=;$f0=[io.file]::ReadAllText($env:0); $0=($f0-split '#\:MakeISO\:' ,3)[1]; $1=$env:1-replace'([`@$])','`$1'; iex($0+$1)
