@@ -21,19 +21,19 @@ if (!$env:1) { return }
 if (1 -eq $env:2) {$toggle = 1} elseif (0 -eq $env:2) {$toggle = 0} else {$toggle = 2}
 
 #:: Verify extension is .iso .esd or .wim
-$input = get-item -lit $env:1; $invalid = '.iso','.esd','.wim' -notcontains $input.Extension
+$src = get-item -lit $env:1; $invalid = '.iso','.esd','.wim' -notcontains $src.Extension
 if ($invalid) {write-host "`n Input is not a iso / esd / wim file ...`n" -fore Yellow; return } 
-try {[io.file]::OpenWrite($input).close()} catch {write-host "`n ERROR! $input read-only or in use ...`n" -fore Red; return }
+try {[io.file]::OpenWrite($src).close()} catch {write-host "`n ERROR! $src read-only or in use ...`n" -fore Red; return }
 
 #:: TPM patch via InstallationType Server
 $typeC = '<INSTALLATIONTYPE>Client'; $typeS = '<INSTALLATIONTYPE>Server'
-$block = 1048576; $chunk = 2097152; $count = [uint64]([IO.FileInfo]$input).Length / $chunk - 1
+$block = 1048576; $chunk = 2097152; $count = [uint64]([IO.FileInfo]$src).Length / $chunk - 1
 $bytes = new-object "Byte[]" ($chunk); $begin = [uint64]0; $final = [uint64]0; $limit = [uint64]0
 function tochars {return [Text.Encoding]::GetEncoding(28591).GetString([Text.Encoding]::Unicode.GetBytes($args[0]))}
 $find1 = tochars "</INSTALLATIONTYPE>"; $find2 = tochars "</WIM>"; $cli = tochars $typeC; $srv = tochars $typeS
 
-$f = new-object IO.FileStream ($input, 3, 3, 1); $p = 0; $p = $f.Seek(0, 2)
-write-host "$input`nsearching $p bytes, please wait ...`n"
+$f = new-object IO.FileStream ($src, 3, 3, 1); $p = 0; $p = $f.Seek(0, 2)
+write-host "$src`nsearching $p bytes, please wait ...`n"
 for ($o = 1; $o -le $count; $o++) { 
   $p = $f.Seek(-$chunk, 1); $r = $f.Read($bytes, 0, $chunk); if ($r -ne $chunk) {write-host invalid block $r; break}
   $u = [Text.Encoding]::GetEncoding(28591).GetString($bytes); $t = $u.LastIndexOf($find1, [StringComparison]4) 
@@ -49,12 +49,12 @@ for ($o = 1; $o -le $count; $o++) {
 
 if ($begin -gt 0 -and $final -gt $begin) {
   $x = $final - $begin; $f.Seek(-$x, 1) >''; $bytes = new-object "Byte[]" ($x); $r = $f.Read($bytes, 0, $x)
-  if ($r -ne $x) {break}
+  if ($r -ne $x) {$f.Dispose(); return}   #:: was bare break, which is invalid outside a loop
   $t =  [Text.Encoding]::GetEncoding(28591).GetString($bytes)
   if ($t.IndexOf($cli, [StringComparison]4) -ge 0) {$src = 0} else {$src = 1} 
   if ($src -eq 0 -and $toggle -ne 0) {$old = $cli; $new = $srv} elseif ($src -eq 1 -and $toggle -ne 1) {$old = $srv; $new = $cli}
-  else {write-host "`n:) $input already has TPM patch $toggle"; $f.Dispose(); return}
-  $t = $t.Replace($old, $new); $t; $b = [Text.Encoding]::GetEncoding(28591).GetBytes($t); $f.Seek(-$x, 1) >''; $f.Write($b, 0, $x)
+  else {write-host "`n:) $src already has TPM patch $toggle"; $f.Dispose(); return}
+  $t = $t.Replace($old, $new); $b = [Text.Encoding]::GetEncoding(28591).GetBytes($t); $f.Seek(-$x, 1) >''; $f.Write($b, 0, $x)
   if ($src -eq 1) {write-host "`n :D TPM patch removed" -fore Green} else {write-host "`n:D TPM patch added" -fore Green} 
   $f.Dispose(); [GC]::Collect()
 } else {write-host "`n;( TPM patch failed" -fore Red; $f.Dispose()}

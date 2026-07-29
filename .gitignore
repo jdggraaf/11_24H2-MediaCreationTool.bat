@@ -1,7 +1,6 @@
 dev/
 $ISO$/
 *.iso
-.github/
 node_modules/
 memory-bank/
-*.json
+latest_MCT.url

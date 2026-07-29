@@ -11,7 +11,9 @@ pushd "%dir%sources" || (echo "%dir%sources" not found! script should be run fro
 ::# start sources\setup if under winpe (when booted from media) [Shift] + [F10]: c:\auto or d:\auto or e:\auto etc.
 reg query "HKLM\Software\Microsoft\Windows NT\CurrentVersion\WinPE">nul 2>nul && (
  for %%s in (sCPU sRAM sSecureBoot sStorage sTPM) do reg add HKLM\SYSTEM\Setup\LabConfig /f /v Bypas%%sCheck /d 1 /t reg_dword
- start "WinPE" sources\setup.exe & exit /b 
+ reg add HKLM\SYSTEM\Setup /f /v HwReqChk /d 1 /t reg_dword
+ if exist setup.exe (start "WinPE" setup.exe) else (start "WinPE" ..\setup.exe)
+ exit /b 
 ) 
 
 ::# init variables
@@ -91,10 +93,10 @@ timeout /t 10
 reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate" /f /v DisableWUfBSafeguards /d 1 /t reg_dword >nul 2>nul  
 
 ::# prevent usage of MCT for intermediary upgrade in Dynamic Update (causing 7 to 19H1 instead of 7 to 21H2 for example) 
-if "%Build%" gtr "15063" (set OPTIONS=%OPTIONS% /UpdateMedia Decline)
+if %Build%0 gtr 150630 (set OPTIONS=%OPTIONS% /UpdateMedia Decline)
 
 ::# skip windows 11 upgrade checks: add launch option trick if old-style 0-byte file trick is not on the media  
-if "%Build%" lss "22000" set /a SKIP_11_SETUP_CHECKS=0
+if %Build%0 lss 220000 set /a SKIP_11_SETUP_CHECKS=0
 reg add HKLM\SYSTEM\Setup\MoSetup /f /v AllowUpgradesWithUnsupportedTPMorCPU /d 1 /t reg_dword >nul 2>nul &rem ::# TPM 1.2+ only
 if "%SKIP_11_SETUP_CHECKS%" equ "1" cd.>appraiserres.dll 2>nul & rem ::# writable media only
 for %%A in (appraiserres.dll) do if %%~zA gtr 0 (set TRICK=/Product Server ) else (set TRICK=)

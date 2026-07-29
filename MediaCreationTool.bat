@@ -70,6 +70,13 @@ set "VERSIONS=" & set /a dV=0
 for %%r in (%VTABLE%) do for /f "tokens=2 delims=:" %%b in ("%%r") do set /a dV+=1 & call set "VERSIONS=%%VERSIONS%%,%%b"
 set "VERSIONS=%VERSIONS:~1%"
 
+::# dV10 = last Windows 10 row, used when the host is older than 10 so 'auto' upgrades it to 10 and not to 11.
+::# Splitting a menu name on _ yields "11" only for the 11_* rows, so this needs no substring handling.
+set /a dV10=0
+for %%r in (%VTABLE%) do for /f "tokens=1-2 delims=:" %%a in ("%%r") do for /f "tokens=1 delims=_" %%p in ("%%b") do (
+  if "%%p" neq "11" set /a dV10=%%a
+)
+
 ::# MCT Preset choice dialog items and default-index [Select in MCT]
 set PRESETS=^&Auto Upgrade,Auto ^&ISO,Auto ^&USB,^&Select,MCT ^&Defaults
 set /a dP=4
@@ -82,6 +89,9 @@ call :reg_query "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion" "ProductName
 call :reg_query "HKU\S-1-5-18\Control Panel\Desktop\MuiCached" "MachinePreferredUILanguages" OS_LANGCODE
 for %%s in (%OS_LANGCODE%) do set "OS_LANGCODE=%%s"
 set "OS_ARCH=x64" & if "%PROCESSOR_ARCHITECTURE:~-2%" equ "86" if not defined PROCESSOR_ARCHITEW6432 set "OS_ARCH=x86"
+::# detect an ARM64 host - it previously fell through to x64, which is media that cannot install on ARM hardware
+if /i "%PROCESSOR_ARCHITECTURE%" equ "ARM64" set "OS_ARCH=arm64"
+if /i "%PROCESSOR_ARCHITEW6432%" equ "ARM64" set "OS_ARCH=arm64"
 
 ::# parse MCT choice from script name or commandline - accepts both formats: 1909 or 19H2 etc.
 for %%r in (%VTABLE%) do for /f "tokens=1-3 delims=:" %%a in ("%%r") do for %%s in (%MCT% %~n0 %*) do (
@@ -92,7 +102,9 @@ if defined MCT if not defined VID set "MCT="
 
 ::# parse AUTO from script name or commandline - starts unattended upgrade / in-place repair / cross-edition
 for %%s in (%~n0 %*) do if /i %%s equ auto set /a AUTO=1
-if defined AUTO set /a PRE=1 & if not defined MCT set /a MCT=%dV% & if %OS_VERSION%0 lss 102400 set /a MCT=13
+::# a pre-10 host auto-upgrades to the newest 10, not to 11 - was hardcoded 13 (21H2) and now derives to the last
+::# Windows 10 row in the table, which is 22H2 (19045), the final Windows 10 release
+if defined AUTO set /a PRE=1 & if not defined MCT set /a MCT=%dV% & if %OS_VERSION%0 lss 102400 set /a MCT=%dV10%
 
 ::# parse ISO from script name or commandline - starts media creation with selection
 for %%s in (%~n0 %*) do if /i %%s equ iso set /a ISO=1
@@ -109,7 +121,7 @@ for %%E in ( ProfessionalEducation ProfessionalEducationN ProfessionalWorkstatio
 for %%s in (%~n0 %*) do set ".=%%~s" & for /f %%C in ('cmd /q /v:on /c echo;!.:~2^,1!') do if "%%C" equ "-" set "LANGCODE=%%s"
 
 ::# parse ARCH from script name or commandline - no, it does not accept "both"
-for %%s in (%~n0 %*) do for %%A in (x86 x64) do if /i %%s equ %%A set "ARCH=%%A"
+for %%s in (%~n0 %*) do for %%A in (x86 x64 arm64) do if /i %%s equ %%A set "ARCH=%%A"
 
 ::# parse KEY from script name or commandline - accepts the format: AAAAA-VVVVV-EEEEE-YYYYY-OOOOO
 for %%s in (%KEY% %~n0 %*) do for /f "tokens=1-5 delims=-" %%A in ("%%s") do if "%%E" neq "" set "PKEY=%%s" & set "KEY="
@@ -246,12 +258,14 @@ goto process ::# modern windows 10 starts here with proper memory allocation, cp
 
 :choice-7
 set "VER=17763" & set "VID=1809" & set "CB=17763.379.190312-0539.rs5_release_svc_refresh" & set "CT=2019/03/" & set "CC=1.3"
+set "DEAD=MediaCreationTool1809.exe returns HTTP 400"
 set "CAB=https://download.microsoft.com/download/8/E/8/8E852CBF-0BCC-454E-BDF5-60443569617C/products_20190314.cab"
 set "EXE=https://software-download.microsoft.com/download/pr/MediaCreationTool1809.exe"
 goto process ::# rather mediocre considering it is the base for ltsc 2019; less smooth than 1803 in games; intel pre-4th-gen buggy
 
 :choice-6
 set "VER=17134" & set "VID=1803" & set "CB=17134.112.180619-1212.rs4_release_svc_refresh" & set "CT=2018/07/" & set "CC=1.2"
+set "DEAD=MediaCreationTool1803.exe returns HTTP 400"
 set "CAB=https://download.microsoft.com/download/5/C/B/5CB83D2A-2D7E-4129-9AFE-353F8459AA8B/products_20180705.cab"
 set "EXE=https://software-download.microsoft.com/download/pr/MediaCreationTool1803.exe"
 goto process ::# update available to finally fix most standby memory issues that were present since 1703; intel pre-4th-gen buggy
@@ -273,12 +287,14 @@ goto process ::# some gamers still find it the best despite unfixed memory alloc
 
 :choice-3
 set "VER=14393" & set "VID=1607" & set "CB=14393.0.161119-1705.rs1_refresh" & set "CT=2017/01/" & set "CC=1.0"
+set "DEAD=catalog host wscont.apps.microsoft.com no longer resolves"
 set "CAB=https://wscont.apps.microsoft.com/winstore/OSUpgradeNotification/MediaCreationTool/prod/Products_20170116.cab"
 set "EXE=https://download.microsoft.com/download/C/F/9/CF9862F9-3D22-4811-99E7-68CE3327DAE6/MediaCreationTool.exe"
 goto process ::# snappy and stable for legacy hardware (but with excruciantly slow windows update process)
 
 :choice-2
 set "VER=10586" & set "VID=1511" & set "CB=10586.0.160426-1409.th2_refresh" & set "CT=2016/05/" & set "CC=1.0"
+set "DEAD=catalog host wscont.apps.microsoft.com no longer resolves"
 set "XML=https://wscont.apps.microsoft.com/winstore/OSUpgradeNotification/MediaCreationTool/prod/Products05242016.xml"
 set "EXE=https://download.microsoft.com/download/1/C/4/1C41BC6B-F8AB-403B-B04E-C96ED6047488/MediaCreationTool.exe"
 rem 1511 MCT exe works and can select Education - using 1607 one instead anyway for unified products.xml catalog 1.0 format
@@ -287,6 +303,7 @@ goto process ::# most would rather go with 1507 or 1607 instead, with little eff
 
 :choice-1
 set "VER=10240" & set "VID=1507" & set "CB=10240.16393.150909-1450.th1_refresh" & set "CT=2015/09/" & set "CC=1.0"
+set "DEAD=catalog host wscont.apps.microsoft.com no longer resolves"
 set "XML=https://wscont.apps.microsoft.com/winstore/OSUpgradeNotification/MediaCreationTool/prod/Products09232015_2.xml"
 set "EXE=https://download.microsoft.com/download/1/C/8/1C8BAF5C-9B7E-44FB-A90A-F58590B5DF7B/v2.0/MediaCreationToolx64.exe"
 set "EXE32=https://download.microsoft.com/download/1/C/8/1C8BAF5C-9B7E-44FB-A90A-F58590B5DF7B/v2.0/MediaCreationTool.exe"
@@ -332,12 +349,17 @@ prompt $G & (<"%~f0" (set /p _=&for /l %%s in (1,1,20) do set _=& set /p _=& cal
 for /f "delims=:" %%s in ('echo;prompt $h$s$h:^|cmd /d') do set "|=%%s"&set ">>=\..\c nul&set /p s=%%s%%s%%s%%s%%s%%s%%s<nul&popd"
 set "<=pushd "%appdata%"&2>nul findstr /c:\ /a" &set ">=%>>%&echo;" &set "|=%|:~0,1%" &set /p s=\<nul>"%appdata%\c"
 ::# (un)define main variables
-for %%s in (OPTIONS MCT XML CAB EXE VID PRE AUTO ISO EDITION KEY ARCH LANGCODE NO_UPDATE DEF AKEY REG_EDITION) do set "%%s="
+for %%s in (OPTIONS MCT XML CAB EXE VID PRE AUTO ISO EDITION KEY ARCH LANGCODE NO_UPDATE DEF AKEY REG_EDITION DEAD) do set "%%s="
 for %%s in (latest_MCT.url) do if not exist %%s (echo;[InternetShortcut]&echo;URL=github.com/AveYo/MediaCreationTool.bat)>%%s
 goto Universal MCT
 
 ::--------------------------------------------------------------------------------------------------------------------------------
 :process
+::# fail fast when the selected version's Microsoft-hosted sources are gone - otherwise DOWNLOAD works through
+::# four methods over two schemes before erroring, which just looks like a hang. See "Known broken" in README.
+if defined DEAD %<%:4f " UNAVAILABLE "%>>% & %<%:0f " %VID% - %DEAD% "%>%
+if defined DEAD echo;& %<%:0f " Microsoft retired this source and there is no replacement url - pick another version "%>%
+if defined DEAD echo;& timeout /t 15 & exit /b 1
 if %PRE% equ 1 (set "PRESET=Auto Upgrade")
 if %PRE% equ 2 (set "PRESET=Auto ISO")
 if %PRE% equ 3 (set "PRESET=Auto USB")
@@ -398,8 +420,12 @@ if defined MEDIA for %%s in (%MEDIA_LANGCODE%) do (set LANGCODE=%%s)
 if defined MEDIA for %%s in (%MEDIA_EDITION%) do (set EDITION=%%s)
 if defined MEDIA for %%s in (%MEDIA_ARCH%) do (set ARCH=%%s)
 if defined MEDIA for %%s in (%MEDIA_KEY%) do (if not defined KEY set KEY=%%s)
-::# windows 11 not available on x86
-if %VER% geq 22000 (set MEDIA_ARCH=x64& if defined ARCH set ARCH=x64)
+::# windows 11 has no x86 media, so clamp x86 up to x64 - but leave x64 AND arm64 alone. This used to force x64
+::# unconditionally, which is why arm64 could never be selected even though half of every 11 catalog is ARM64.
+if %VER% geq 22000 if /i "%MEDIA_ARCH%" equ "x86" set "MEDIA_ARCH=x64"
+if %VER% geq 22000 if /i "%ARCH%" equ "x86" set "ARCH=x64"
+::# no arm64 clamp for 10: Windows 10 on ARM media is real. Verified 2026-07-30 that the 22H2 catalog carries 1064
+::# ARM64 entries and that 19045.3803...A64FRE_en-us.esd is live on Microsoft's CDN at 3.66 GB.
 
 ::# windows 11 vs 10 label - VID carries the family as an 11_ prefix, so both fall out of one substitution
 ::# keep these on two lines: %VIS% on the same line as its own `set` would still expand to the previous value
@@ -733,8 +759,12 @@ pushd "%dir%sources" || (echo "%dir%sources" not found! script should be run fro
 reg query "HKLM\Software\Microsoft\Windows NT\CurrentVersion\WinPE">nul 2>nul && (
  for %%s in (sCPU sRAM sSecureBoot sStorage sTPM) do reg add HKLM\SYSTEM\Setup\LabConfig /f /v Bypas%%sCheck /d 1 /t reg_dword
  reg add HKLM\SYSTEM\Setup /f /v HwReqChk /d 1 /t reg_dword
- start "WinPE" sources\setup.exe & exit /b 
-) 
+::# the working dir is already <media>\sources from the pushd above, so the old `sources\setup.exe` resolved to
+::# <media>\sources\sources\setup.exe and never existed - verified against real 25H2 media. Plain setup.exe is the
+::# 341KB sources\setup.exe; ..\setup.exe is the media-root launcher, kept as a fallback.
+ if exist setup.exe (start "WinPE" setup.exe) else (start "WinPE" ..\setup.exe)
+ exit /b
+)
 
 ::# init variables
 setlocal EnableDelayedExpansion
@@ -753,7 +783,6 @@ for %%v in (CompositionEditionID EditionID ProductName) do (
 
 ::# get current version
 for %%v in (CompositionEditionID EditionID ProductName CurrentBuildNumber) do call :reg_query "%NT%" %%v %%v
-for /f "tokens=2-3 delims=[." %%i in ('ver') do for %%s in (%%i) do set /a Version=%%s*10+%%j
 
 ::# WIM_INFO w_5=wim_5th b_5=build_5th p_5=patch_5th a_5=arch_5th l_5=lang_5th e_5=edi_5th d_5=desc_5th i_5=edi_5th i_Core=index
 set "0=%~f0"& set wim=& set ext=.esd& if exist install.wim (set ext=.wim) else if exist install.swm set ext=.swm
@@ -813,10 +842,12 @@ timeout /t 10
 reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate" /f /v DisableWUfBSafeguards /d 1 /t reg_dword >nul 2>nul  
 
 ::# prevent usage of MCT for intermediary upgrade in Dynamic Update (causing 7 to 19H1 instead of 7 to 21H2 for example) 
-if "%Build%" gtr "15063" (set OPTIONS=%OPTIONS% /UpdateMedia Decline)
+::# numeric, not string: quoted gtr/lss compares lexicographically, which only worked because every media build
+::# happens to be 5 digits. The trailing 0 keeps it safe if Build is somehow unset.
+if %Build%0 gtr 150630 (set OPTIONS=%OPTIONS% /UpdateMedia Decline)
 
 ::# skip windows 11 upgrade checks: add launch option trick if old-style 0-byte file trick is not on the media  
-if "%Build%" lss "22000" set /a SKIP_11_SETUP_CHECKS=0
+if %Build%0 lss 220000 set /a SKIP_11_SETUP_CHECKS=0
 reg add HKLM\SYSTEM\Setup\MoSetup /f /v AllowUpgradesWithUnsupportedTPMorCPU /d 1 /t reg_dword >nul 2>nul &rem ::# TPM 1.2+ only
 if "%SKIP_11_SETUP_CHECKS%" equ "1" cd.>appraiserres.dll 2>nul & rem ::# writable media only
 for %%A in (appraiserres.dll) do if %%~zA gtr 0 (set TRICK=/Product Server ) else (set TRICK=)
@@ -1173,6 +1204,7 @@ set ^ #=;$f0=[io.file]::ReadAllText($env:0); $0=($f0-split '#\:PRODUCTS_XML\:' ,
 set ^ #=& set "0=%~f0"& set 1=;PRODUCTS_XML %*& powershell -nop -c "%#%"& exit /b
 function PRODUCTS_XML { [xml]$xml = [io.file]::ReadAllText("$pwd\products.xml",[Text.Encoding]::UTF8); $root = $null
  $eulas = 0; $langs = 0; $ver = $env:VER; $vid = $env:VID; $X = $env:X; if ($X-eq'11') {$vid = "11 $env:VIS"}
+ $arm = ($env:MEDIA_ARCH -eq 'arm64')   #:: keep ARM64 catalog entries only when arm64 media was requested
  $url = "http://b1.download.windowsupdate.com/"
 #:: apply/insert Catalog version attribute for MCT compatibility
  if ($null -ne $xml.SelectSingleNode('/MCT')) {
@@ -1209,8 +1241,10 @@ function PRODUCTS_XML { [xml]$xml = [io.file]::ReadAllText("$pwd\products.xml",[
  $BUSINESS = "$vid Pro | Edu | Enterprise"
  $root.Files.File | & { process {
    $_arch = $_.Architecture; $_lang = $_.LanguageCode; $_edi = $_.Edition; $_loc = $_.Edition_Loc; $ok = $true
-  #:: clear ARM64 and %BASE_CHINA% entries to simplify processing - TODO: ARM support
-   if ($_arch -eq 'ARM64' -or ($ver -lt 22000 -and $_loc -eq '%BASE_CHINA%')) {$root.Files.RemoveChild($_) >$null; return}
+  #:: ARM64 entries are kept only when arm64 was actually asked for - roughly half of every 11 catalog is ARM64, and
+  #:: dropping them unconditionally is what made arm64 media impossible. Default stays x64, so nothing regresses.
+   if (-not $arm -and $_arch -eq 'ARM64') {$root.Files.RemoveChild($_) >$null; return}
+   if ($ver -lt 22000 -and $_loc -eq '%BASE_CHINA%') {$root.Files.RemoveChild($_) >$null; return}
   #:: unhide combined business editions in xml that include them: 1709 - 21H1; unhide Education on 1507 - 1511; better label
    if ($env:UNHIDE_BUSINESS -ge 1) {
      if ($_edi -eq 'Enterprise' -or $_edi -eq 'EnterpriseN') {$_.IsRetailOnly = 'False'; $_.Edition_Loc = $BUSINESS}

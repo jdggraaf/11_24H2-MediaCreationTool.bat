@@ -17,6 +17,12 @@
         <Path>reg add HKLM\SYSTEM\Setup\LabConfig /v BypassStorageCheck /d 1 /t reg_dword /f</Path></RunSynchronousCommand>
       <RunSynchronousCommand wcm:action="add"><Order>5</Order>
         <Path>reg add HKLM\SYSTEM\Setup\LabConfig /v BypassCPUCheck /d 1 /t reg_dword /f</Path></RunSynchronousCommand>
+      <RunSynchronousCommand wcm:action="add"><Order>6</Order>
+        <Path>reg add HKLM\SYSTEM\Setup /v HwReqChk /t reg_dword /d 1 /f</Path></RunSynchronousCommand>
+      <!-- MoSetup bypass for upgrade scenarios with unsupported TPM or CPU - HKLM\SYSTEM\Setup\MoSetup is the key
+           Windows actually reads; do not move it under SOFTWARE\...\Setup\MoSetup -->
+      <RunSynchronousCommand wcm:action="add"><Order>7</Order>
+        <Path>reg add HKLM\SYSTEM\Setup\MoSetup /v AllowUpgradesWithUnsupportedTPMorCPU /t reg_dword /d 1 /f</Path></RunSynchronousCommand>
     </RunSynchronous>
   </component></settings>  
   <settings pass="specialize"><component name="Microsoft-Windows-Deployment" processorArchitecture="amd64" language="neutral"

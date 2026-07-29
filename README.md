@@ -30,6 +30,25 @@ Windows 10 22H2 media is final at `19045.3803` and will not change — Windows 1
 
 Because the live fetch always returns whatever Microsoft currently publishes, 25H2 media stays current on its own — the hardcoded build is only a label, and the script now prints the catalog's real build when the two differ.
 
+ARM64 media
+-----------
+Roughly **half of every Windows 11 catalog is ARM64** — 1140 of 2282 entries for 25H2 — and all of it used to be
+thrown away, so arm64 media could not be built at all. Windows 10 on ARM is real too: the 22H2 catalog carries 1064
+ARM64 entries and `19045.3803...A64FRE_en-us.esd` is live on Microsoft's CDN at 3.66 GB.
+
+ARM64 is **opt-in**, so nothing changes unless you ask for it:
+
+```
+arm64 iso MediaCreationTool.bat          rem or pass arm64 on the commandline
+```
+
+An ARM64 *host* is now detected as arm64 as well — it previously fell through to x64, which is media that cannot
+install on ARM hardware. x86 is still clamped up to x64 for Windows 11, which genuinely has no x86 media.
+
+> Caveat: the catalog side is verified — ARM64 entries survive, `/MediaArch arm64` is passed to MCT, and x64
+> behaviour is byte-for-byte unchanged (1142 entries either way). Whether MCT itself accepts `/MediaArch arm64`
+> end-to-end has **not** been tested here, since that means a separate 5.9 GB ARM64 download.
+
 Adding a new version
 --------------------
 Version metadata used to be spread over five places that could silently drift apart. It is now **two**:
@@ -235,6 +254,24 @@ Fork changelog
               with a clear message instead of letting MCT author media for a different build. Verified against all
               16 reachable catalogs (1703-25H2) - each contains exactly one build family matching its VER, so the
               guard cannot false-positive on a working version.
+            ARM64 media support, opt-in via `arm64` - see the ARM64 section above. Half of every 11 catalog was
+              being discarded. ARM64 hosts are now detected instead of falling through to unusable x64 media.
+            The five entries whose Microsoft sources are gone now fail fast with the reason, before elevating,
+              instead of grinding through every download method and then waiting on a keypress.
+            FIXED: the generated auto.cmd launched `sources\setup.exe` from a working directory that was already
+              <media>\sources, so it resolved to <media>\sources\sources\setup.exe and never existed. Confirmed
+              against real 25H2 media. Now uses setup.exe with ..\setup.exe as fallback. Upstream bug.
+            Build numbers in auto.cmd are compared numerically; the quoted gtr/lss forms were string comparisons
+              that only happened to work because every media build is five digits.
+            The pre-10 'auto' target is derived from the table as the last Windows 10 row instead of a hardcoded
+              index. That moves it from 21H2 to 22H2 (19045), the final Windows 10 release.
+            Removed a dead `set /a Version=` line from the auto.cmd template.
+            .gitignore no longer excludes .github/ - CI workflows could never be committed - nor blanket *.json.
+            bypass11/ resynced with what the script generates, and three upstream defects fixed in
+              Quick_11_iso_esd_wim_TPM_toggle.bat: a bare `break` outside any loop, a stray `$t;` that dumped the
+              whole WIM XML to the console, and use of $input, which is a PowerShell automatic variable.
+            The elevation shim in Skip_TPM_Check_on_Dynamic_Update.cmd and windows_update_refresh.bat now removes
+              the HKCU .Admin class association and its temp file, which were left registered permanently.
 ```
 
 Notes from surveying the fork network
@@ -268,14 +305,13 @@ rather than fixed. Everything from `1703` onward works, apart from `1803` / `180
 | `1803` | MCT executable | `software-download.microsoft.com/download/pr/MediaCreationTool1803.exe` → HTTP 400 |
 | `1809` | MCT executable | `.../MediaCreationTool1809.exe` → HTTP 400 |
 
-Failure mode is poor: `DOWNLOAD` tries four methods across both http and https before giving up, so the script
-appears to hang for a while, then shows its ERROR banner and waits on a keypress. If you pick one of these five,
-that is why.
+These five now **fail fast**. Each carries a `DEAD` marker and the script stops at once, before elevating, with the
+reason printed — instead of working through four download methods over two schemes and then hanging on a keypress.
+Selecting `1803` exits in about a second. If Microsoft ever restores a source, delete that entry's `DEAD` line.
 
-The `bypass11/` folder is a hand-maintained snapshot of the generated files and has drifted from what the script
-now produces: `bypass11/auto.cmd` is missing the `HwReqChk` write, and `bypass11/AutoUnattend.xml` has neither
-`HwReqChk` nor the `MoSetup` entry. Use the files the script generates, not these, if you want the current
-bypass set.
+`bypass11/` is a hand-maintained snapshot of the generated files. It had drifted and has been resynced: `auto.cmd`
+now carries the `HwReqChk` write and the WinPE path fix, and `AutoUnattend.xml` now has both `HwReqChk` and the
+`MoSetup` entry (10 bypass commands, was 5), matching what the script generates.
 - Media built by this script carries a deliberate Windows Update pin (`TargetReleaseVersion` +
   `TargetReleaseVersionInfo=25H1`). `25H1` is **not a typo** — AveYo points the pin at a version that never
   existed to suppress the unsupported-hardware nag. Side effect: installed machines are not offered feature
