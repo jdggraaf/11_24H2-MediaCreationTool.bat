@@ -223,7 +223,36 @@ Fork changelog
             FIXED: AutoUnattend.xml wrote AllowUpgradesWithUnsupportedTPMorCPU to
               HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Setup\MoSetup, which is not the key Windows reads.
               Corrected to HKLM\SYSTEM\Setup\MoSetup, matching auto.cmd and Microsoft's documented location.
+2026.07.30: FIXED: the REG_EDITION else-branch was `else set (REG_EDITION=)` - malformed, so it created a variable
+              named "(REG_EDITION" and never cleared REG_EDITION. An inherited value could have leaked into the
+              1703-and-earlier registry edition workaround. REG_EDITION also added to the startup undefine list.
+              Credit: independently found in the Pingasmaster fork.
+            DOWNLOAD now tries https BEFORE http instead of after. The old order meant the MCT executable - which
+              is subsequently run elevated - was requested in plaintext first, and was interceptable on a hostile
+              network. http is kept as a last-resort fallback rather than removed, because some retired Microsoft
+              paths still answer only over http.
+            Added a catalog sanity guard: products.xml must contain entries for the selected VER, else the run stops
+              with a clear message instead of letting MCT author media for a different build. Verified against all
+              16 reachable catalogs (1703-25H2) - each contains exactly one build family matching its VER, so the
+              guard cannot false-positive on a working version.
 ```
+
+Notes from surveying the fork network
+-------------------------------------
+Upstream has ~3,100 forks and has been dormant since 2024-08-15. Most are untouched copies - several of the
+top-starred ones are byte-identical to upstream. Only a handful carry real changes, and two were worth mining:
+
+- **Pingasmaster** independently found the `REG_EDITION` else-set bug and the http-before-https ordering, both now
+  fixed here. They also added a products.xml build check, generalised here to derive the expected build from `VER`.
+  Note they changed `LICENSE` to their own copyright, which MIT does not permit - this fork keeps AveYo's notice.
+- **Jettcodey** is the only fork that revives the dead `1507` / `1511` / `1607` / `1803` / `1809` entries, by
+  re-hosting every file on `mct-files.de` (verified working). The cost is steep: 42 third-party urls against 5
+  Microsoft ones, no integrity verification, and the script's "nothing but Microsoft-hosted source links" claim had
+  to be rewritten. Not adopted. If mirroring is ever added here it should be opt-in and SHA-256 pinned, so the
+  trust property that mirroring removes is restored by verification.
+
+No fork surveyed does live catalog fetching - they all hardcode a static catalog url, which is why they go stale.
+None does ARM64 either, which remains the largest functional gap in all of them.
 
 Known broken
 ------------

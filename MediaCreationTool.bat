@@ -332,7 +332,7 @@ prompt $G & (<"%~f0" (set /p _=&for /l %%s in (1,1,20) do set _=& set /p _=& cal
 for /f "delims=:" %%s in ('echo;prompt $h$s$h:^|cmd /d') do set "|=%%s"&set ">>=\..\c nul&set /p s=%%s%%s%%s%%s%%s%%s%%s<nul&popd"
 set "<=pushd "%appdata%"&2>nul findstr /c:\ /a" &set ">=%>>%&echo;" &set "|=%|:~0,1%" &set /p s=\<nul>"%appdata%\c"
 ::# (un)define main variables
-for %%s in (OPTIONS MCT XML CAB EXE VID PRE AUTO ISO EDITION KEY ARCH LANGCODE NO_UPDATE DEF AKEY) do set "%%s="
+for %%s in (OPTIONS MCT XML CAB EXE VID PRE AUTO ISO EDITION KEY ARCH LANGCODE NO_UPDATE DEF AKEY REG_EDITION) do set "%%s="
 for %%s in (latest_MCT.url) do if not exist %%s (echo;[InternetShortcut]&echo;URL=github.com/AveYo/MediaCreationTool.bat)>%%s
 goto Universal MCT
 
@@ -385,7 +385,10 @@ for %%s in (%MEDIA_EDITION%) do for %%K in (
 
 ::# detected / selected media preset
 if defined EDITION (set EDITION=%MEDIA_EDITION%)
-if "%MEDIA_EDITION%" neq "%OS_EDITION%" (set REG_EDITION=%MEDIA_EDITION%) else set (REG_EDITION=)
+::# the else was `set (REG_EDITION=)` - malformed, so it created a variable named "(REG_EDITION" and never cleared
+::# REG_EDITION. Harmless while REG_EDITION starts empty, but it would leak an inherited value into the 1703-and-
+::# earlier registry edition workaround. Fixed here and REG_EDITION added to the undefine list at startup.
+if "%MEDIA_EDITION%" neq "%OS_EDITION%" (set REG_EDITION=%MEDIA_EDITION%) else (set REG_EDITION=)
 set "CONSUMER=%MEDIA_EDITION:Enterprise=%"
 if "%CONSUMER%" equ "%MEDIA_EDITION%" (set CFG=Consumer) else (set CFG=Business)
 if not defined EDITION (set UNSTAGED=1& set STAGED=) else (set UNSTAGED=& set STAGED=%MEDIA_EDITION%)
@@ -429,6 +432,14 @@ if not exist products.xml if exist products%VID%.xml copy /y products%VID%.xml p
 set "/hint=Check urls in browser | del ESD dir | use powershell v3.0+ | unblock powershell | enable BITS serv"
 echo;& set err=& for %%s in (products.xml MediaCreationTool%VID%.exe) do if not exist %%s set err=1
 if defined err (%<%:4f " ERROR "%>>% & %<%:0f " %/hint% "%>%) else if not defined err %<%:0f " %PRESET% "%>%
+if defined err (del /f /q products%VID%.* MediaCreationTool%VID%.exe 2>nul & pause & exit /b1)
+
+::# sanity guard: the catalog must actually describe the version that was asked for, otherwise MCT would happily
+::# author media for a different build. Every catalog carries its build as the FileName prefix, e.g. 26200.8875...esd
+::# Verified 2026-07-30 against all 16 reachable catalogs (1703 through 25H2): each contains exactly one build
+::# family and it always matches VER, so this cannot false-positive on a working version.
+findstr /m /c:"%VER%." products.xml >nul 2>nul || (set err=1 & set "/hint=products.xml has no %VER% entries - wrong or corrupt catalog for %VID%")
+if defined err (%<%:4f " ERROR "%>>% & %<%:0f " %/hint% "%>%)
 if defined err (del /f /q products%VID%.* MediaCreationTool%VID%.exe 2>nul & pause & exit /b1)
 
 ::# configure products.xml in one go via powershell snippet - most of the MCT fixes happen there
@@ -1118,7 +1129,10 @@ set ^ #=& set "0=%~f0"& set 1=;DOWNLOAD %*& powershell -nop -c "%#%"& exit /b %e
 function DOWNLOAD ($u, $f, $p = (get-location).Path) {
   $null = Import-Module BitsTransfer -ea 0; $wc = new-object Net.WebClient; $wc.Headers.Add('user-agent','ipad')
   $file = join-path $p $f; $s = 'https://'; $i = 'http://'; $d = $u.replace($s,'').replace($i,''); $https = $s+$d; $http = $i+$d
-  foreach ($url in $http, $https) {
+  #:: https FIRST, http only as a last resort - this used to be the other way round, which meant the MCT executable
+  #:: (later run elevated) was requested in plaintext first and was interceptable on a hostile network. Kept as a
+  #:: fallback rather than removed, because some retired Microsoft paths still only answer over http.
+  foreach ($url in $https, $http) {
     if (([IO.FileInfo]$file).Exists) {return}; try {Start-BitsTransfer $url $file -ea 1} catch {}
     if (([IO.FileInfo]$file).Exists) {return}; try {Invoke-WebRequest $url -OutFile $file} catch {} ; $j = (Get-Date).Ticks
     if (([IO.FileInfo]$file).Exists) {return}; try {$null = bitsadmin /transfer $j /priority foreground $url $file} catch {}
