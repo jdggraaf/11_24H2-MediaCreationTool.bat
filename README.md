@@ -3,7 +3,55 @@ Not just an Universal MediaCreationTool wrapper script with ingenious support fo
 A powerful yet simple windows 10 / 11 deployment automation tool as well!  
 *If you had no success launching the script so far, this latest version will work*  
 
-**25H2 CAB Fetch** — Dynamically fetch 25H2 media metadata directly from Microsoft's Update Metadata Service, with automatic country/language detection via `LANGCODE`
+> **About this fork.** Original work by [AveYo](https://github.com/AveYo/MediaCreationTool.bat), whose repository
+> remains the upstream and the source of everything from 1507 through 24H2. This fork
+> (`jdggraaf`, via `lzw29107`) adds Windows 11 25H2 support with a live catalog fetch and the extended TPM
+> bypasses. The in-script `latest_MCT.url` shortcut still points at AveYo's repo by design — that is the
+> canonical upstream. Screenshot above predates the 25H2 entry.
+
+**25H2 CAB Fetch** — Dynamically fetch 25H2 media metadata directly from Microsoft's Update Metadata Service, with automatic country/language detection via `LANGCODE`. Falls back to Microsoft's static Download Center catalog if the live service is unreachable, so the script no longer aborts when the fetch fails.
+
+Which Windows version do I get?
+------------------------------
+Verified against Microsoft's live catalogs on **2026-07-29**:
+
+| Choice | Build the media contains | Notes |
+| --- | --- | --- |
+| `11_25H2` | `26200.8875.260711-1836` | current retail media, fetched live — newest available |
+| `11_24H2` | `26100.4349.250607-1500` | static cab, still the current 24H2 media |
+| `22H2` (Win 10) | `19045.3803.231204-0204` | frozen; Windows 10 media has not been refreshed since EOL |
+
+Windows 10 22H2 media is final at `19045.3803` and will not change — Windows 10 reached end of support on 2025-10-14, and consumer Extended Security Updates end **2026-10-13**. Security fixes since then ship through Windows Update only, never in the installation media.
+
+**There is deliberately no 26H1 or 26H2 entry**, and adding one today would not work:
+
+- **26H1** (build `28000`) is a hardware-enablement release shipped **preinstalled on ARM64 Snapdragon X2 devices only**. Microsoft publishes no MCT media or upgrade path for it, so there is nothing for this script to fetch.
+- **26H2** (build `26300`) is an *enablement package* over the same 25H2 platform, due **fall 2026**. Until it reaches GA the MCT still serves 25H2.
+
+Because the live fetch always returns whatever Microsoft currently publishes, 25H2 media stays current on its own — the hardcoded build is only a label, and the script now prints the catalog's real build when the two differ.
+
+Adding a new version
+--------------------
+Version metadata used to be spread over five places that could silently drift apart. It is now **two**:
+
+1. A row in the `VTABLE` version table near the top of the script — `index:menu-name:alternative-alias`.
+2. The matching `:choice-NN` block holding that version's `VER` / `VID` / `CB` / `CT` / `CC` and its `CAB` / `XML` / `EXE` sources.
+
+The menu list (`VERSIONS`), the default index (`dV`), the script-name and commandline aliases, and the `VIS` / `X`
+display labels are all derived from that table at runtime. A menu name beginning with `11_` is what marks a row as
+Windows 11, so `15:11_26H2:2609` would classify itself with no further code changes.
+
+So when 26H2 ships, it is one table row plus one choice block:
+
+```
+set VTABLE=%VTABLE% 20:11_26H2:2609
+:choice-20
+set "VER=26300" & set "VID=11_26H2" & set "CB=<build tag>" & set "CT=<yyyy/mm/>" & set "CC=2.1"
+set "CAB=FETCH"
+set "XML=<static Download Center catalog url>"
+set "EXE=https://go.microsoft.com/fwlink/?linkid=2156295"
+goto process
+```
 
 **TPM Bypass Enhancements** — Comprehensive hardware requirement spoofing for WinPE and upgrade scenarios:
 - `HwReqChk` registry key for spoofing hardware capabilities
@@ -49,6 +97,9 @@ Features
   - Resolves signed URL and downloads 25H2 products.cab
   - Respects `LANGCODE` environment variable for country/region detection (e.g., `nl-NL` → `IsoCountryShortCode=NL`)
   - Fallback to host system culture if `LANGCODE` not set
+  - Validates the cabinet signature, so a captive portal or error page cannot be mistaken for a catalog
+  - Falls back to the static Download Center catalog if the service is unreachable, instead of aborting
+  - The MCT executable is resolved through Microsoft's `fwlink`, so it tracks the current tool without link maintenance
 - **TPM Bypass Enhancements** for unsupported hardware scenarios
   - `HwReqChk` registry key spoofs hardware capabilities in WinPE and upgrade scenarios
   - LabConfig registry bypasses for: TPM, SecureBoot, RAM, CPU, Storage checks
@@ -148,3 +199,38 @@ _We did it! We broke [the previous gist](https://git.io/MediaCreationTool.bat)_ 
 2022.03.20: stable - all issues ironed out; improved script ui; upgrade keeping files from Eval editions too
             last squash I promise ;)
 ```
+
+Fork changelog
+--------------
+```
+2025.xx.xx: 25H2 support with products.cab fetched live from Microsoft Update Metadata Service (FE3)
+            TPM bypass enhancements: HwReqChk, LabConfig, MoSetup AllowUpgradesWithUnsupportedTPMorCPU
+2026.07.29: 25H2 media refreshed to 26200.8875 (260711-1836) - was 26200.6899 (251011-1532)
+            MCT exe now resolved via fwlink 2156295 instead of a hardcoded GUID url
+            static Download Center catalog added as fallback when the live FE3 fetch fails
+            fetched cab is validated (MSCF signature) before it is trusted
+            catalogs from a previous run are cleared first - a failed download could reuse another version's products.xml
+            the catalog's real media build is printed when it differs from the hardcoded menu label
+            corrected the INSERT_BUSINESS comment: the CSV only ever applied to 14393,15063,18363,19041,19042,19043
+            version metadata consolidated into one VTABLE - menu, aliases, dV and VIS/X are now derived from it
+            FETCH_25H2_CAB renamed FETCH_CAB and made version-neutral; its FE3 spoof constants are documented
+              and overridable via FETCH_TARGET / FETCH_OSVER / FETCH_LCU, so 26H2 needs no code change
+            TLS 1.3 selection made conditional - referencing it on pre-.NET-4.8 hosts threw and killed the fetch
+            documented that `exit /b %errorcode%` in the powershell stubs is deliberate, not a typo
+            FIXED: every Windows 11 selection (index 15-19) was discarded when the script self-elevated, because
+              the restore used a hardcoded "lss 15" bound left over from when 14 Windows 10 versions existed -
+              the version dialog reappeared after the UAC prompt. Bound now comes from the table.
+            FIXED: AutoUnattend.xml wrote AllowUpgradesWithUnsupportedTPMorCPU to
+              HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Setup\MoSetup, which is not the key Windows reads.
+              Corrected to HKLM\SYSTEM\Setup\MoSetup, matching auto.cmd and Microsoft's documented location.
+```
+
+Known broken
+------------
+- **Choices `1507` and `1511` cannot work.** Their only catalog source is `wscont.apps.microsoft.com`, which no
+  longer resolves (NXDOMAIN). The script downloads their MCT executable fine, then fails on the catalog after
+  working through every download method. There is no replacement URL; these two entries are effectively dead.
+- Media built by this script carries a deliberate Windows Update pin (`TargetReleaseVersion` +
+  `TargetReleaseVersionInfo=25H1`). `25H1` is **not a typo** — AveYo points the pin at a version that never
+  existed to suppress the unsupported-hardware nag. Side effect: installed machines are not offered feature
+  updates until that policy is cleared. Quality and security updates are unaffected.

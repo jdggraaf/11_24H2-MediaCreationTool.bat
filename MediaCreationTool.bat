@@ -4,12 +4,15 @@
 :: Ingenious support for business editions (Enterprise / VL) selecting language, x86, x64 or AiO inside the MCT GUI
 :: 25H2 CAB dynamically fetched from Microsoft Update Metadata Service with LANGCODE support
 :: TPM Bypass Enhancements with HwReqChk, LabConfig, and MoSetup registry configurations
-:: Changelog: 2026.01.15 stable
+:: Changelog: 2026.07.29 refreshed to current media
+:: - 25H2 media refreshed to 26200.8875 (260711-1836); MCT exe via fwlink; catalog fetch validated, with static fallback
+:: - fixed: 11 selections were lost across self-elevation (stale index bound); AutoUnattend MoSetup key path corrected
 :: - TPM Bypass Enhancements: HwReqChk, LabConfig (TPM/SecureBoot/RAM/CPU/Storage checks), MoSetup AllowUpgradesWithUnsupportedTPMorCPU
 :: - 25H2 dynamic CAB fetch from FE3 (respects LANGCODE for country detection)
 :: - all issues ironed out; upgrade keeping files from Eval editions too; pickup $ISO$ dir content to add on media
 :: - DU in 11: auto installs 22000.556 atm; older skip_11_checks, without Server label; Home offline local account
-:: on upgrade: latest build, on offline install: 11 25H2 26200.6899 / 11 24H2 26100.4349 / 11 23H2 22631.2861 / 11 22H2 22621.1702 / 11 21H2 22000.318 / 22H2 19045.3803 / 21H2 19044.1288 / 21H1 19043.1348 / 20H2 19042.1052
+:: note: 26H1 (28000) is ARM64 preinstall-only and has no MCT media; 26H2 (26300) is an enablement package due fall 2026
+:: on upgrade: latest build, on offline install: 11 25H2 26200.8875 / 11 24H2 26100.4349 / 11 23H2 22631.2861 / 11 22H2 22621.1702 / 11 21H2 22000.318 / 22H2 19045.3803 / 21H2 19044.1288 / 21H1 19043.1348 / 20H2 19042.1052
 
 ::# uncomment to skip GUI dialog for MCT choice: 1507 to 11 25H2 - or rename script: "11_25H2 MediaCreationTool.bat"
 rem set MCT=2509
@@ -48,12 +51,24 @@ set OPTIONS=%OPTIONS% /Telemetry Disable /CompactOS Disable
 ::# comment to not unhide Enterprise for 1709+ in products.xml
 set /a UNHIDE_BUSINESS=1
 
-::# comment to not insert Enterprise esd links for 1607,1703 or update links for 1909,2004,20H2,21H2,22H2,11_21H2,11_22H2,11_23H2,11_24H2,11_25H2 in products.xml
+::# comment to not insert Enterprise esd links for 1607,1703 or update links for 1909,2004,20H2,21H1 in products.xml
+::# only those six builds (14393,15063,18363,19041,19042,19043) use the CSV below - newer catalogs already ship business
+::# entries, which UNHIDE_BUSINESS reveals; they also moved from Sha1 to Sha256 and to GUID urls the CSV cannot express
 set /a INSERT_BUSINESS=1
 
-::# MCT Version choice dialog items and default-index [11_25H2]
-set VERSIONS=1507,1511,1607,1703,1709,1803,1809,1903,1909,20H1,20H2,21H1,21H2,22H2,11_21H2,11_22H2,11_23H2,11_24H2,11_25H2
-set /a dV=19
+::# ================================================================================================================
+::# Version table - SINGLE SOURCE OF TRUTH for the version menu and the script-name / commandline aliases.
+::# Adding a version = one row here + the matching :choice-NN block below. Nothing else needs editing.
+::# row format:  index:menu-name:alternative-alias     ( use - when the version has only one name )
+::# a menu name starting with 11_ is what marks it as Windows 11 - VIS and X are derived from that further down
+set VTABLE=1:1507:- 2:1511:- 3:1607:- 4:1703:- 5:1709:- 6:1803:- 7:1809:- 8:1903:19H1 9:1909:19H2
+set VTABLE=%VTABLE% 10:20H1:2004 11:20H2:2009 12:21H1:2104 13:21H2:2109 14:22H2:2210
+set VTABLE=%VTABLE% 15:11_21H2:2110 16:11_22H2:2209 17:11_23H2:2310 18:11_24H2:2409 19:11_25H2:2509
+
+::# MCT Version choice dialog items and default-index [last table row] - both derived from the table above
+set "VERSIONS=" & set /a dV=0
+for %%r in (%VTABLE%) do for /f "tokens=2 delims=:" %%b in ("%%r") do set /a dV+=1 & call set "VERSIONS=%%VERSIONS%%,%%b"
+set "VERSIONS=%VERSIONS:~1%"
 
 ::# MCT Preset choice dialog items and default-index [Select in MCT]
 set PRESETS=^&Auto Upgrade,Auto ^&ISO,Auto ^&USB,^&Select,MCT ^&Defaults
@@ -69,8 +84,10 @@ for %%s in (%OS_LANGCODE%) do set "OS_LANGCODE=%%s"
 set "OS_ARCH=x64" & if "%PROCESSOR_ARCHITECTURE:~-2%" equ "86" if not defined PROCESSOR_ARCHITEW6432 set "OS_ARCH=x86"
 
 ::# parse MCT choice from script name or commandline - accepts both formats: 1909 or 19H2 etc.
-for %%V in (1.1507 2.1511 3.1607 4.1703 5.1709 6.1803 7.1809 8.1903 8.19H1 9.1909 9.19H2 10.2004 10.20H1 11.2009 11.20H2 12.2104
- 12.21H1 13.2109 13.21H2 14.2210 14.22H2 15.2110 15.11_21H2 16.2209 16.11_22H2 17.2310 17.11_23H2 18.2409 18.11_24H2 19.2509 19.11_25H2) do for %%s in (%MCT% %~n0 %*) do if /i %%~xV equ .%%~s set "MCT=%%~nV" & set "VID=%%~s"
+for %%r in (%VTABLE%) do for /f "tokens=1-3 delims=:" %%a in ("%%r") do for %%s in (%MCT% %~n0 %*) do (
+  if /i "%%~s" equ "%%b" set "MCT=%%a" & set "VID=%%~s"
+  if /i "%%~s" neq "-" if /i "%%~s" equ "%%c" set "MCT=%%a" & set "VID=%%~s"
+)
 if defined MCT if not defined VID set "MCT="
 
 ::# parse AUTO from script name or commandline - starts unattended upgrade / in-place repair / cross-edition
@@ -123,8 +140,9 @@ if not defined VID (set VID=%OS_VID%)
 (set MEDIA_EDITION=%MEDIA_EDITION:IoTEnterprise=Enterprise%)
 (set MEDIA_EDITION=%MEDIA_EDITION:IoTEnterpriseS=Enterprise%)
 
-::# get previous GUI selection if self elevated and skip to choice
-for %%s in (%*) do for %%P in (1 2 3 4) do if %%~ns gtr 0 if %%~ns lss 15 if %%~xs. equ .%%P. set /a PRE=%%P & set /a MCT=%%~ns
+::# get previous GUI selection if self elevated and skip to choice - bound comes from the table, a hardcoded one
+::# went stale when 11 was added and silently dropped selections 15-19, re-showing the dialog after elevating
+for %%s in (%*) do for %%P in (1 2 3 4) do if %%~ns gtr 0 if %%~ns leq %dV% if %%~xs. equ .%%P. set /a PRE=%%P & set /a MCT=%%~ns
 
 ::# write auto media preset hint
 %<%:f0 " Detected Media "%>>% & if defined MCT %<%:5f " %VID% "%>>%
@@ -147,9 +165,13 @@ if %MCT%0 gtr 1 if %PRE%0 lss 1 goto choice-0 = cancel
 goto choice-%MCT%
 
 :choice-19
-set "VER=26200" & set "VID=11_25H2" & set "CB=26200.6899.251011-1532.25h2_ge_release_svc_refresh" & set "CT=2025/10/" & set "CC=2.1"
-set "CAB=FETCH_25H2"
-set "EXE=https://download.microsoft.com/download/0a8b07d9-a3bf-47b9-b71b-8e13354cec88/MediaCreationTool.exe"
+set "VER=26200" & set "VID=11_25H2" & set "CB=26200.8875.260711-1836.25h2_ge_release_svc_refresh" & set "CT=2026/07/" & set "CC=2.1"
+::# CAB is fetched live from Microsoft (always the newest published media); XML is the static Download Center catalog
+::# used as fallback - process order expands the CAB *over* the XML, so the XML only survives if the live fetch failed
+set "CAB=FETCH"
+set "XML=https://download.microsoft.com/download/eb1cc454-1c9a-4c94-adf8-b30c7f3d03d1/products.xml"
+::# fwlink always resolves to the current Media Creation Tool - no need to chase hardcoded GUID urls
+set "EXE=https://go.microsoft.com/fwlink/?linkid=2156295"
 goto process ::# windows 11 25H2
 
 :choice-18
@@ -331,7 +353,9 @@ fltmc>nul||(set A=/d /x /c set "ROOT=%ROOT%"^& start "MCT" "%~f0" %* %set%& powe
 mkdir "%WORK%\MCT" >nul 2>nul & attrib -R -S -H "%WORK%" /D & pushd "%WORK%\MCT"
 del /f /q products.* *.key EI.cfg PID.txt auto.cmd AutoUnattend.xml >nul 2>nul
 set /a latest=0 & if exist latest set /p latest=<latest
-echo;20231129>latest & if %latest% lss 20211116 del /f /q products*.* MediaCreationTool*.exe >nul 2>nul
+::# DOWNLOAD skips files that already exist, so a cached MediaCreationTool*.exe would otherwise be kept forever.
+::# Bumping this stamp forces one purge per stamp change - do it whenever a source url or media baseline moves.
+echo;20260729>latest & if %latest% lss 20260729 del /f /q products*.* MediaCreationTool*.exe >nul 2>nul
 
 ::# edition fallback to ones that MCT supports - after selection
 (set MEDIA_EDITION=%MEDIA_EDITION:Eval=%)
@@ -374,12 +398,10 @@ if defined MEDIA for %%s in (%MEDIA_KEY%) do (if not defined KEY set KEY=%%s)
 ::# windows 11 not available on x86
 if %VER% geq 22000 (set MEDIA_ARCH=x64& if defined ARCH set ARCH=x64)
 
-::# windows 11 vs 10 label quirks - guess I should not have combined them, but then again, 11 is 10 with a ui downgrade ;)
-if %VER% geq 22000 (set X=11& set VIS=21H2) else (set X=10& set VIS=%VID%)
-if %VER% geq 22621 (set X=11& set VIS=22H2)
-if %VER% geq 22631 (set X=11& set VIS=23H2)
-if %VER% geq 26100 (set X=11& set VIS=24H2)
-if %VER% geq 26200 (set X=11& set VIS=25H2)
+::# windows 11 vs 10 label - VID carries the family as an 11_ prefix, so both fall out of one substitution
+::# keep these on two lines: %VIS% on the same line as its own `set` would still expand to the previous value
+set "VIS=%VID:11_=%"
+if "%VIS%" equ "%VID%" (set "X=10") else (set "X=11")
 
 ::# refresh screen
 cls & <"%~f0" (set /p _=&for /l %%s in (1,1,20) do set _=& set/p _=& call echo;%%_%%)
@@ -389,15 +411,21 @@ cls & <"%~f0" (set /p _=&for /l %%s in (1,1,20) do set _=& set/p _=& call echo;%
 if %PRE% leq 3 %<%:6f " %MEDIA_LANGCODE% "%>>%  &  %<%:9f " %MEDIA_CFG% "%>>%  &  %<%:2f " %MEDIA_ARCH% "%>%
 echo;
 
+::# clear catalogs left by a previous run - WORK dir persists, so a failed download would silently reuse another version's xml
+del /f /q products.xml products%VID%.xml products%VID%.cab >nul 2>nul
+
 ::# download MCT and CAB / XML - new snippet to try via bits, net, certutil, and insecure/secure
 if defined EXE echo;%EXE% & call :DOWNLOAD "%EXE%" MediaCreationTool%VID%.exe
-if defined XML if exist "%XML%" (echo;%XML% & copy /y "%XML%" products.xml >nul 2>nul) else (echo;%XML% & call :DOWNLOAD "%XML%" products%VID%.xml)
 if defined CAB (
-  if "%CAB%" equ "FETCH_25H2" (echo;Fetching 25H2 CAB from Microsoft & call :FETCH_25H2_CAB) else (echo;%CAB% & call :DOWNLOAD "%CAB%" products%VID%.cab)
+  if "%CAB%" equ "FETCH" (echo;Fetching %VID% catalog from Microsoft & call :FETCH_CAB) else (echo;%CAB% & call :DOWNLOAD "%CAB%" products%VID%.cab)
 )
-if exist products%VID%.xml copy /y products%VID%.xml products.xml >nul 2>nul
 if exist products%VID%.cab expand.exe -R products%VID%.cab -F:* . >nul 2>nul
 if exist products%VID%.cab del /f /q products%VID%.cab >nul 2>nul
+::# XML is the only catalog source for 1507 / 1511, and the fallback when a CAB source failed - so fetch it only if needed
+if defined XML if not exist products.xml echo;%XML%
+if defined XML if not exist products.xml if exist "%XML%" copy /y "%XML%" products.xml >nul 2>nul
+if defined XML if not exist products.xml call :DOWNLOAD "%XML%" products%VID%.xml
+if not exist products.xml if exist products%VID%.xml copy /y products%VID%.xml products.xml >nul 2>nul
 set "/hint=Check urls in browser | del ESD dir | use powershell v3.0+ | unblock powershell | enable BITS serv"
 echo;& set err=& for %%s in (products.xml MediaCreationTool%VID%.exe) do if not exist %%s set err=1
 if defined err (%<%:4f " ERROR "%>>% & %<%:0f " %/hint% "%>%) else if not defined err %<%:0f " %PRESET% "%>%
@@ -803,6 +831,15 @@ exit /b
 :reg_query [USAGE] call :reg_query "HKCU\Volatile Environment" Value variable
 (for /f "tokens=2*" %%R in ('reg query "%~1" /v "%~2" /se "|" %4 2^>nul') do set "%~3=%%S") & exit /b
 
+::# ================================================================================================================
+::# Convention for the powershell helper stubs below (WIM_INFO, MakeISO, FETCH_CAB, DOWNLOAD):
+::# each ends with `exit /b %errorcode%` - that is INTENTIONAL and must not be "corrected" to %errorlevel%.
+::# ERRORCODE is not a cmd variable, so it expands to nothing and the statement becomes a bare `exit /b`,
+::# which returns powershell's exit code. Writing %errorlevel% there would expand it BEFORE powershell runs
+::# (the whole `set ... & powershell ... & exit /b ...` line is expanded in one pass), returning a stale value.
+::# If you want it explicit, write a bare `exit /b` - never plain %errorlevel% on these single-line stubs.
+::# Do not put ::# comments BETWEEN a #:NAME:# marker pair either - that text is iex'd as powershell.
+::# ================================================================================================================
 #:WIM_INFO:# [PARAMS]: "file" [optional]Index or 0 = all  Output 0 = txt 1 = xml 2 = file.txt 3 = file.xml 4 = xml object
 set ^ #=;$f0=[io.file]::ReadAllText($env:0); $0=($f0-split '#[:]WIM_INFO[:]' ,3)[1]; $1=$env:1-replace'([`@$])','`$1'; iex($0+$1)
 set ^ #=& set "0=%~f0"& set 1=;WIM_INFO %*& powershell -nop -c "%#%"& exit /b %errorcode%
@@ -881,7 +918,7 @@ function WIM_INFO ($file = 'install.esd', $index = 0, $out = 0) { :info while ($
       </RunSynchronousCommand>
       <!-- MoSetup bypass for upgrade scenarios with unsupported TPM or CPU -->
       <RunSynchronousCommand wcm:action="add"><Order>10</Order>
-        <Path>reg add HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Setup\MoSetup /v AllowUpgradesWithUnsupportedTPMorCPU /t reg_dword /d 1 /f</Path>
+        <Path>reg add HKLM\SYSTEM\Setup\MoSetup /v AllowUpgradesWithUnsupportedTPMorCPU /t reg_dword /d 1 /f</Path>
       </RunSynchronousCommand>
     </RunSynchronous>
   </component></settings>
@@ -933,19 +970,17 @@ function MakeISO ($dir,$iso,$label='DVD_ROM') {if (!(test-path -Path $dir -patht
 } #:MakeISO:#  export directory as (bootable) udf iso - lean and mean snippet by AveYo, 2022.03.15
 
 ::--------------------------------------------------------------------------------------------------------------------------------
-#:FETCH_25H2_CAB:#  [INTERNAL] Fetch 25H2 CAB from Microsoft Update Metadata Service
-set ^ #=;$f0=[io.file]::ReadAllText($env:0); $0=($f0-split '#\:FETCH_25H2_CAB\:')[1]; $1=$env:1-replace'([`@$])','`$1'; iex($0+$1)
-set ^ #=& set "0=%~f0"& set 1=;FETCH_25H2_CAB %*& powershell -nop -c "%#%"& exit /b %errorcode%
-function FETCH_25H2_CAB {
-  [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 -bor [Net.SecurityProtocolType]::Tls13
+#:FETCH_CAB:#  [INTERNAL] Fetch the current media catalog from the Microsoft Update Metadata Service (FE3)
+set ^ #=;$f0=[io.file]::ReadAllText($env:0); $0=($f0-split '#\:FETCH_CAB\:')[1]; $1=$env:1-replace'([`@$])','`$1'; iex($0+$1)
+set ^ #=& set "0=%~f0"& set 1=;FETCH_CAB %*& powershell -nop -c "%#%"& exit /b %errorcode%
+function FETCH_CAB {
+  # Tls13 only exists on .NET 4.8+ - referencing it on an older host throws, so fall back to Tls12 alone
+  try { [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 -bor [Net.SecurityProtocolType]::Tls13 }
+  catch { try { [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 } catch {} }
   $uri = "https://fe3.delivery.mp.microsoft.com/UpdateMetadataService/updates/search/v1/bydeviceinfo"
   $output = "$pwd\products$env:VID.cab"
   $ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) MediaCreationTool/10.0"
   try {
-    $cv = Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion'
-    $build = $cv.CurrentBuild
-    $ubr = $cv.UBR
-    $editionId = $cv.EditionID
     $arch = "AMD64"
     # Derive country from LANGCODE or MEDIA_LANGCODE; fallback to host culture
     $lc = $env:LANGCODE; if (-not $lc -or [string]::IsNullOrWhiteSpace($lc)) { $lc = $env:MEDIA_LANGCODE }
@@ -955,15 +990,24 @@ function FETCH_25H2_CAB {
       if ($parts.Length -ge 2 -and $parts[1].Length -ge 2) { $country = $parts[1].Substring(0,2).ToUpperInvariant() }
       else { $country = ([System.Globalization.RegionInfo] $lc).TwoLetterISORegionName }
     } catch { $country = ([System.Globalization.RegionInfo] (Get-Culture).Name).TwoLetterISORegionName }
-    # OSVersion/LcuVersion/MediaVersion set to known-good values for 26100 target
-    
-    $targetVersion = "26100.0.0.0"
+    # ---------------------------------------------------------------------------------------------------------
+    # These are DELIBERATE SPOOFED VALUES, not the host's real state. They are what makes FE3 return the newest
+    # published client media catalog. Do NOT "correct" them to match the running OS - that breaks the fetch.
+    #   targetVersion / OSVersion : claim a 24H2 (26100) servicing baseline, which is what the product
+    #                               Windows.Products.Cab.amd64 is published against
+    #   lcuVersion / mediaVersion : a build high enough that the service hands back the current catalog instead
+    #                               of a back-level one (28000 is the 26H1 servicing branch)
+    # Verified working 2026-07-29: returns the 26200.8875.260711-1836 catalog. If a future release needs
+    # different values, override via environment - no code change required.
+    # ---------------------------------------------------------------------------------------------------------
+    $targetVersion = $env:FETCH_TARGET; if (-not $targetVersion) { $targetVersion = "26100.0.0.0" }
+    $osVersion     = $env:FETCH_OSVER;  if (-not $osVersion)     { $osVersion     = "10.0.26100.1" }
+    $lcuVersion    = $env:FETCH_LCU;    if (-not $lcuVersion)    { $lcuVersion    = "10.0.28000.1340" }
+    $mediaVersion  = $lcuVersion
     $branch = "br_release"
     $previewBuilds = 1
     $attrDataVer = 338
-    $lcuVersion = "10.0.28000.1340"
-    $mediaVersion = "10.0.28000.1340"
-    
+
     $deviceAttrs = @(
       "MediaBranch=$branch"
       "App=Setup360"
@@ -983,7 +1027,7 @@ function FETCH_25H2_CAB {
       "HotPatchEligible=0"
       "OSSKUId=48"
       "IsoCountryShortCode=$country"
-      "OSVersion=10.0.26100.1"
+      "OSVersion=$osVersion"
       "AttrDataVer=$attrDataVer"
       "EditionId=Professional"
       "DUScan=1"
@@ -1001,7 +1045,7 @@ function FETCH_25H2_CAB {
       "User-Agent" = $ua
     }
     
-    write-host "Querying Microsoft Update Metadata Service for 25H2 CAB..."
+    write-host "Querying Microsoft Update Metadata Service for the $env:VID catalog..."
     $response = Invoke-RestMethod -Uri $uri -Method Post -Headers $headers -Body $body -ErrorAction Stop -TimeoutSec 30
     
     $url = $null
@@ -1026,7 +1070,7 @@ function FETCH_25H2_CAB {
       return 1
     }
     
-    write-host "Downloading 25H2 CAB from: $($url.Substring(0, [Math]::Min(80, $url.Length)))..."
+    write-host "Downloading catalog from: $($url.Substring(0, [Math]::Min(80, $url.Length)))..."
     try {
       Invoke-WebRequest -Uri $url -Headers @{ "User-Agent"=$ua; "Accept"="*/*" } -OutFile $output -ErrorAction Stop
       $size = (Get-Item $output).Length
@@ -1045,14 +1089,26 @@ function FETCH_25H2_CAB {
       write-host "Downloaded CAB to $output (Size: $([math]::Round($size/1MB, 2)) MB)"
     }
 
-    
+    # validate the MSCF cabinet magic - a captive portal / error page would otherwise expand into a bogus catalog
+    $valid = $false
+    if (Test-Path $output) {
+      $fs = [IO.File]::OpenRead($output); $magic = New-Object byte[] 4
+      $null = $fs.Read($magic, 0, 4); $fs.Close()
+      $valid = ($magic[0] -eq 0x4D -and $magic[1] -eq 0x53 -and $magic[2] -eq 0x43 -and $magic[3] -eq 0x46)
+    }
+    if (-not $valid) {
+      write-host -fore Yellow "Response was not a valid CAB - discarding it and falling back to the static catalog"
+      Remove-Item $output -Force -ErrorAction SilentlyContinue
+      return 1
+    }
     return 0
   } catch {
     write-host -fore Red "Error: $_"
-    write-host -fore Yellow "Fallback: Unable to fetch 25H2 CAB"
+    write-host -fore Yellow "Could not fetch the live catalog - falling back to the static one"
+    Remove-Item $output -Force -ErrorAction SilentlyContinue
     return 1
   }
-} #:FETCH_25H2_CAB:#
+} #:FETCH_CAB:#
 
 ::--------------------------------------------------------------------------------------------------------------------------------
 #:DOWNLOAD:# [PARAMS] "url" "file" [optional]"path"
@@ -1111,6 +1167,9 @@ function PRODUCTS_XML { [xml]$xml = [io.file]::ReadAllText("$pwd\products.xml",[
    $temp.SelectSingleNode('/MCT/Catalogs/Catalog').AppendChild($temp.ImportNode($xml.PublishedMedia,$true)) >$null
    $xml = $temp; $root = $xml.SelectSingleNode('/MCT/Catalogs/Catalog/PublishedMedia')
  }
+#:: report the build this catalog actually publishes - the hardcoded menu label can lag behind a Microsoft media refresh
+ $mb = @($root.Files.File)[0].FileName -replace '_(CLIENT|BUSINESS).*$',''
+ if ($mb -match '^\d+\.\d+\.' -and $mb -ne $env:CB) {write-host -fore Cyan "  catalog media build: $mb"}
  foreach ($l in $root.ChildNodes) {if ($l.LocalName -eq 'EULAS') {$eulas = 1}; if ($l.LocalName -eq 'Languages') {$langs = 1} }
 #:: apply/insert EULA url fix to prevent MCT timing out while downloading it (likely TLS issue under naked Windows 7 host)
  $eula = "http://download.microsoft.com/download/C/0/3/C036B882-9F99-4BC9-A4B5-69370C4E17E9/EULA_MCTool_"
