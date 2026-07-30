@@ -357,6 +357,13 @@ goto Universal MCT
 if defined DEAD %<%:4f " UNAVAILABLE "%>>% & %<%:0f " %VID% - %DEAD% "%>%
 if defined DEAD echo;& %<%:0f " Microsoft retired this source and there is no replacement url - pick another version "%>%
 if defined DEAD echo;& timeout /t 15 & exit /b 1
+
+::# Same idea as the DEAD guard above, and likewise before elevating: MCT cannot build ARM64 media: SetupHost rejects /MediaArch arm64 with 0xC190010D, an invalid launch option.
+::# Verified 2026-07-30 in C:\Windows\Logs\MoSetup\BlueBox.log - x86, x64 and both are the only accepted values.
+::# Refuse with the reason rather than passing a flag that makes MCT die with an opaque error.
+if /i "%MEDIA_ARCH%" equ "arm64" %<%:4f " UNSUPPORTED "%>>% & %<%:0f " MCT rejects /MediaArch arm64 and cannot build ARM64 media "%>%
+if /i "%MEDIA_ARCH%" equ "arm64" echo;& %<%:0f " Get ARM64 media from Microsoft's Windows 11 download page, or build it with UUP dump "%>%
+if /i "%MEDIA_ARCH%" equ "arm64" echo;& timeout /t 15 & exit /b 1
 if %PRE% equ 1 (set "PRESET=Auto Upgrade")
 if %PRE% equ 2 (set "PRESET=Auto ISO")
 if %PRE% equ 3 (set "PRESET=Auto USB")
@@ -421,12 +428,6 @@ if defined MEDIA for %%s in (%MEDIA_KEY%) do (if not defined KEY set KEY=%%s)
 ::# which also overwrote a deliberate choice; arm64 now falls through to the explicit refusal just below.
 if %VER% geq 22000 if /i "%MEDIA_ARCH%" equ "x86" set "MEDIA_ARCH=x64"
 if %VER% geq 22000 if /i "%ARCH%" equ "x86" set "ARCH=x64"
-::# MCT cannot build ARM64 media: SetupHost rejects /MediaArch arm64 with 0xC190010D, an invalid launch option.
-::# Verified 2026-07-30 in C:\Windows\Logs\MoSetup\BlueBox.log - x86, x64 and both are the only accepted values.
-::# Refuse with the reason rather than passing a flag that makes MCT die with an opaque error.
-if /i "%MEDIA_ARCH%" equ "arm64" %<%:4f " UNSUPPORTED "%>>% & %<%:0f " MCT rejects /MediaArch arm64 and cannot build ARM64 media "%>%
-if /i "%MEDIA_ARCH%" equ "arm64" echo;& %<%:0f " Get ARM64 media from Microsoft's Windows 11 download page, or build it with UUP dump "%>%
-if /i "%MEDIA_ARCH%" equ "arm64" echo;& timeout /t 15 & exit /b 1
 ::# For the record, the ARM64 media itself is real and published - the 22H2 catalog carries 1064 ARM64 entries and
 ::# 19045.3803...A64FRE_en-us.esd is live on Microsoft's CDN at 3.66 GB. MCT just refuses to author it.
 
@@ -505,13 +506,11 @@ if not defined KEY (del /f /q PID.txt 2>nul) else (echo;[PID]& echo;Value=%KEY%&
 ::# generate EI.cfg for skipping key entry for generic 11 media
 if not defined KEY if %VER% geq 22000 (echo;[Channel]& echo;_Default)>EI.cfg
 
-::# generate auto.cmd for upgrading without prompts - also copied to media so it can be re-run on demand
-::# keep files and apps from Ultimate / PosReady / Embedded / LTSC / Enterprise Eval 
-set "0=%~f0"& powershell -nop -c "iex ([io.file]::ReadAllText($env:0) -split '[:]generate_auto_cmd')[1];"
-
-::# generate AutoUnattend.xml for enabling offline local account on 11 Home editions
-::# gets placed inside boot.wim so that it does not affect setup.exe under windows
-set "0=%~f0"& powershell -nop -c "iex ([io.file]::ReadAllText($env:0) -split '[:]generate_AutoUnattend_xml')[1];"
+::# generate auto.cmd (unattended upgrade, keeps files and apps from Ultimate / PosReady / Embedded / LTSC / Eval,
+::# and is copied onto the media) plus AutoUnattend.xml (offline local account on 11 Home, injected into boot.wim).
+::# Both templates live in this file, so one powershell instance reads it once and emits both - this was two
+::# separate spawns, each paying process startup and re-reading the whole script.
+set "0=%~f0"& powershell -nop -c "$t = [io.file]::ReadAllText($env:0); iex ($t -split '[:]generate_auto_cmd')[1]; iex ($t -split '[:]generate_AutoUnattend_xml')[1];"
 
 ::# cleanup stale files
 dism /cleanup-wim >nul 2>nul
@@ -1004,6 +1003,9 @@ function MakeISO ($dir,$iso,$label='DVD_ROM') {if (!(test-path -Path $dir -patht
  iso.Commit(0); Console.WriteLine("\r{0,2}%  {1}MB  MakeISO",100,MB); return 0;} }
 "@; & { $cs = new-object CodeDom.Compiler.CompilerParameters; $cs.GenerateInMemory = 1 #:: ` used to silence ps eventlog
  $compile = (new-object Microsoft.CSharp.CSharpCodeProvider).CompileAssemblyFromSource($cs, $code)
+ #:: without this, a compile failure surfaces later as "[dir2iso] type not found" - after the multi-GB download and
+ #:: the whole media layout have already completed, which is the worst possible moment for an opaque error
+ if ($compile.Errors.HasErrors) {foreach ($e in $compile.Errors) {write-host -fore Red "[MakeISO] $($e.ErrorText)"}; return}
  $BOOT = @(); $bootable = 0; $mbr_efi = @(0,0xEF); $images = @('boot\etfsboot.com','efi\microsoft\boot\efisys.bin') #:: _noprompt
  0,1|% { $bootimage = join-path $dir -child $images[$_]; if (test-path -Path $bootimage -pathtype Leaf) {
  $bin = new-object -ComObject ADODB.Stream; $bin.Open(); $bin.Type = 1; $bin.LoadFromFile($bootimage)

@@ -279,6 +279,15 @@ Fork changelog
               whole WIM XML to the console, and use of $input, which is a PowerShell automatic variable.
             The elevation shim in Skip_TPM_Check_on_Dynamic_Update.cmd and windows_update_refresh.bat now removes
               the HKCU .Admin class association and its temp file, which were left registered permanently.
+            The arm64 refusal now happens before self-elevation, alongside the retired-source refusal, so it no
+              longer raises a UAC prompt only to decline a moment later.
+            MakeISO checks whether its runtime C# compile succeeded. A failure previously surfaced as a missing
+              [dir2iso] type - after the multi-GB download and the entire media layout had finished.
+            auto.cmd and AutoUnattend.xml are emitted by a single powershell instance that reads this file once,
+              instead of two spawns each re-reading it. Output verified byte-identical.
+            Verified, no change needed: the 420-row INSERT_BUSINESS CSV still resolves. Sample business ESDs for
+              21H1, 20H1 and 1703 return HTTP 200 at 3.86 / 3.50 / 3.31 GB, so the block is live, not dead weight
+              - worth knowing before anyone trims it for being 40% of the file.
 ```
 
 Notes from surveying the fork network
