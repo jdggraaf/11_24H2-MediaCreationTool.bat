@@ -1,42 +1,100 @@
-Not just an Universal MediaCreationTool wrapper script with ingenious support for business editions,  
-<img src="preview.png">  
-A powerful yet simple windows 10 / 11 deployment automation tool as well!  
-*If you had no success launching the script so far, this latest version will work*  
+Not just an Universal MediaCreationTool wrapper script with ingenious support for business editions,
+<img src="preview.png">
+A powerful yet simple windows 10 / 11 deployment automation tool as well!
+*If you had no success launching the script so far, this latest version will work*
 
-> **About this fork.** Original work by [AveYo](https://github.com/AveYo/MediaCreationTool.bat), whose repository
-> remains the upstream and the source of everything from 1507 through 24H2. This fork
-> (`jdggraaf`, via `lzw29107`) adds Windows 11 25H2 support with a live catalog fetch and the extended TPM
-> bypasses. The in-script `latest_MCT.url` shortcut still points at AveYo's repo by design — that is the
-> canonical upstream. Screenshot above predates the 25H2 entry.
+> **About this fork.** Original work by [AveYo](https://github.com/AveYo/MediaCreationTool.bat), whose repository is
+> the upstream and the source of everything from 1507 through 24H2. This fork (`jdggraaf`, via `lzw29107`) adds
+> Windows 11 25H2 with a live catalog fetch, the extended TPM bypasses, and the fixes in the fork changelog below.
+> The in-script `latest_MCT.url` shortcut still points at AveYo's repo by design. Screenshot predates the 25H2 entry.
 
-**25H2 CAB Fetch** — Dynamically fetch 25H2 media metadata directly from Microsoft's Update Metadata Service, with automatic country/language detection via `LANGCODE`. Falls back to Microsoft's static Download Center catalog if the live service is unreachable, so the script no longer aborts when the fetch fails.
+Contents: [Quick start](#quick-start) · [What you get](#what-you-get) · [Known limitations](#known-limitations) ·
+[What it changes on the media](#what-it-changes-on-the-media) · [Deployment](#simple-deployment) ·
+[Maintaining](#maintaining-the-script) · [Changelog](#changelog)
 
-Which Windows version do I get?
-------------------------------
-Verified against Microsoft's live catalogs on **2026-07-29**:
+Quick start
+-----------
+Run the script. It elevates itself, asks which version and which preset, and does the rest. No need to right-click
+Run as Admin. Every choice can also be preselected by renaming the script or passing arguments, for example:
+
+```
+11_25H2 iso MediaCreationTool.bat          rem 25H2, straight to an ISO
+auto 22H2 Pro MediaCreationTool.bat        rem unattended upgrade to Windows 10 22H2 Pro
+Education en-US x64 iso MediaCreationTool.bat
+```
+
+Presets
+-------
+1 ***Auto Upgrade*** with detected media, script assists setupprep for upgrading directly
+> _- can keep files and apps on more scenarios where os and target edition does not match_  
+> _- can switch detected edition by adding EditionID to script name_  
+> _- can troubleshoot upgrade failing by adding `no_update` to script name_  
+> _- auto defaults to 11, so pass version as well for 10: `auto 21H2 MediaCreationTool.bat`_  
+
+2 ***Auto ISO*** with detected media in current folder directly _(or C:\ESD if run from zip)_
+> _- can override detected media by adding edition name / language / arch to script name_  
+> _- example: `21H1 Education en-US x86 iso MediaCreationTool.bat`_  
+
+3 ***Auto USB*** with detected media in specified usb target
+> _- for data safety, this is not fully automated - must select the usb drive manually in GUI_  
+
+4 ***Select*** with user picked Edition, Language, Arch (x86,x64,both) - on specified target
+> _- implicit choice, includes setup override files (disable by adding `def` to script name)_  
+
+5 ***MCT Defaults*** runs unassisted, creating media without script modification
+> _- no added files, script passes `products.xml` to MCT and quits without touching media_  
+
+What you get
+------------
+Verified against Microsoft's live catalogs on **2026-07-30**:
 
 | Choice | Build the media contains | Notes |
 | --- | --- | --- |
-| `11_25H2` | `26200.8875.260711-1836` | current retail media, fetched live — newest available |
+| `11_25H2` | `26200.8875.260711-1836` | current retail media, fetched live - newest available |
 | `11_24H2` | `26100.4349.250607-1500` | static cab, still the current 24H2 media |
 | `22H2` (Win 10) | `19045.3803.231204-0204` | frozen; Windows 10 media has not been refreshed since EOL |
 
-Windows 10 22H2 media is final at `19045.3803` and will not change — Windows 10 reached end of support on 2025-10-14, and consumer Extended Security Updates end **2026-10-13**. Security fixes since then ship through Windows Update only, never in the installation media.
+25H2 metadata is fetched live from Microsoft's Update Metadata Service (FE3), so it stays current on its own without
+any commit here - the hardcoded build is only a menu label, and the script prints the catalog's real build whenever
+the two differ. If the live service is unreachable it falls back to Microsoft's static Download Center catalog
+instead of aborting, and the downloaded cabinet is checked for its MSCF signature so a captive portal or error page
+cannot be mistaken for a catalog. The MCT executable is resolved through Microsoft's `fwlink`, which always points
+at the current tool. The fetch honours `LANGCODE` for country detection (`nl-NL` becomes `IsoCountryShortCode=NL`)
+and falls back to the host culture when it is not set.
 
-**There is deliberately no 26H1 or 26H2 entry**, and adding one today would not work:
+Windows 10 22H2 media is final at `19045.3803` and will not change. Windows 10 reached end of support on
+2025-10-14 and consumer Extended Security Updates end **2026-10-13**; fixes since then ship through Windows Update
+only, never in the installation media.
 
-- **26H1** (build `28000`) is a hardware-enablement release shipped **preinstalled on ARM64 Snapdragon X2 devices only**. Microsoft publishes no MCT media or upgrade path for it, so there is nothing for this script to fetch.
-- **26H2** (build `26300`) is an *enablement package* over the same 25H2 platform, due **fall 2026**. Until it reaches GA the MCT still serves 25H2.
+**There is deliberately no 26H1 or 26H2 entry.** 26H1 (build `28000`) is a hardware-enablement release shipped
+preinstalled on ARM64 Snapdragon X2 devices only - Microsoft publishes no MCT media for it. 26H2 (build `26300`) is
+an enablement package over the same 25H2 platform, due fall 2026; until it reaches GA the MCT still serves 25H2.
 
-Because the live fetch always returns whatever Microsoft currently publishes, 25H2 media stays current on its own — the hardcoded build is only a label, and the script now prints the catalog's real build when the two differ.
+Known limitations
+-----------------
+### Five menu entries are dead
 
-ARM64 media: not possible with this tool
-----------------------------------------
-Roughly **half of every Windows 11 catalog is ARM64** — 1140 of 2282 entries for 25H2 — and the ARM64 media is
-genuinely published: the Windows 10 22H2 catalog carries 1064 ARM64 entries, and `19045.3803...A64FRE_en-us.esd`
-is live on Microsoft's CDN at 3.66 GB. It is tempting to conclude the tool could build arm64 media.
+All 40 source urls were probed on 2026-07-29. Microsoft retired these five, and there are no replacement urls:
 
-**It cannot.** Tested against real MCT on 2026-07-30:
+| Choice | Dead source | Why |
+| --- | --- | --- |
+| `1507` | catalog XML | `wscont.apps.microsoft.com` no longer resolves (NXDOMAIN) |
+| `1511` | catalog XML | same host |
+| `1607` | catalog CAB | same host |
+| `1803` | MCT executable | `.../download/pr/MediaCreationTool1803.exe` -> HTTP 400 |
+| `1809` | MCT executable | `.../download/pr/MediaCreationTool1809.exe` -> HTTP 400 |
+
+They **fail fast**: each carries a `DEAD` marker and the script stops immediately, before elevating, with the reason
+printed - rather than working through four download methods over two schemes and then waiting on a keypress.
+Selecting `1803` exits in about a second. If Microsoft ever restores a source, delete that entry's `DEAD` line.
+Everything from `1703` onward works, apart from `1803` and `1809`.
+
+### ARM64 media cannot be built with this tool
+
+Roughly half of every Windows 11 catalog is ARM64 - 1140 of 2282 entries for 25H2 - and the media is genuinely
+published: the Windows 10 22H2 catalog carries 1064 ARM64 entries and `19045.3803...A64FRE_en-us.esd` is live on
+Microsoft's CDN at 3.66 GB. It is tempting to conclude the tool could build arm64 media. It cannot. Tested against
+real MCT on 2026-07-30:
 
 ```
 SetupHost.Exe ... "/MediaArch" "x64"     -> runs, media created
@@ -44,68 +102,22 @@ SetupHost.Exe ... "/MediaArch" "arm64"   -> Process exit code: [0xC190010D]
 ```
 
 `0xC190010D` is a MoSetup invalid-launch-option error, logged in `C:\Windows\Logs\MoSetup\BlueBox.log`. MCT accepts
-only `x86`, `x64` and `both`. No amount of catalog manipulation changes that — the refusal happens in SetupHost
-before any catalog is read.
+only `x86`, `x64` and `both`, and the refusal happens inside SetupHost before any catalog is read, so no amount of
+catalog manipulation changes it. Asking for `arm64` therefore stops with that reason - it neither silently builds
+x64 media nor passes a flag that makes MCT die opaquely. For real ARM64 media use Microsoft's Windows 11 download
+page, which publishes ARM64 ISOs directly, or build one with UUP dump.
 
-So asking for `arm64` now **stops immediately with that reason** rather than silently producing x64 media (what the
-script used to do, since `arm64` was not even parsed as an architecture) or passing a flag that makes MCT die with
-an opaque error. For real ARM64 media use Microsoft's Windows 11 download page, which publishes ARM64 ISOs
-directly, or build one with UUP dump.
+### Media carries a deliberate Windows Update pin
 
-The x86 clamp for Windows 11 is now narrower as a side effect: it only promotes `x86` to `x64` instead of
-overwriting whatever architecture was chosen.
+Created media sets `TargetReleaseVersion` with `TargetReleaseVersionInfo=25H1`. `25H1` is **not a typo** - AveYo
+points the pin at a version that never existed in order to suppress the unsupported-hardware nag. Side effect:
+installed machines are not offered feature updates until that policy is cleared. Quality and security updates are
+unaffected.
 
-Adding a new version
---------------------
-Version metadata used to be spread over five places that could silently drift apart. It is now **two**:
+What it changes on the media
+----------------------------
+Presets 1-4 modify the created media as follows (add `def` to the script name for untouched MCT media):
 
-1. A row in the `VTABLE` version table near the top of the script — `index:menu-name:alternative-alias`.
-2. The matching `:choice-NN` block holding that version's `VER` / `VID` / `CB` / `CT` / `CC` and its `CAB` / `XML` / `EXE` sources.
-
-The menu list (`VERSIONS`), the default index (`dV`), the script-name and commandline aliases, and the `VIS` / `X`
-display labels are all derived from that table at runtime. A menu name beginning with `11_` is what marks a row as
-Windows 11, so `15:11_26H2:2609` would classify itself with no further code changes.
-
-So when 26H2 ships, it is one table row plus one choice block:
-
-```
-set VTABLE=%VTABLE% 20:11_26H2:2609
-:choice-20
-set "VER=26300" & set "VID=11_26H2" & set "CB=<build tag>" & set "CT=<yyyy/mm/>" & set "CC=2.1"
-set "CAB=FETCH"
-set "XML=<static Download Center catalog url>"
-set "EXE=https://go.microsoft.com/fwlink/?linkid=2156295"
-goto process
-```
-
-**TPM Bypass Enhancements** — Comprehensive hardware requirement spoofing for WinPE and upgrade scenarios:
-- `HwReqChk` registry key for spoofing hardware capabilities
-- LabConfig registry bypasses: `BypassTPMCheck`, `BypassSecureBootCheck`, `BypassRAMCheck`, `BypassCPUCheck`, `BypassStorageCheck`
-- `AllowUpgradesWithUnsupportedTPMorCPU` for MoSetup upgrade scenarios
-- Maintains existing appraiserres.dll and winsetup.dll bypass mechanisms
-
-Presets  
--------  
-1 ***Auto Upgrade*** with detected media, script assists setupprep for upgrading directly  
-> _- can keep files and apps on more scenarios where os and target edition does not match_  
-> _- can switch detected edition by adding EditionID to script name_  
-> _- can troubleshoot upgrade failing by adding `no_update` to script name_  
-> _- auto defaults to 11, so pass version as well for 10: `auto 21H2 MediaCreationTool.bat`_  
-
-2 ***Auto ISO*** with detected media in current folder directly _(or C:\ESD if run from zip)_  
-> _- can override detected media by adding edition name / language / arch to script name_  
-> _- example: `21H1 Education en-US x86 iso MediaCreationTool.bat`_  
-
-3 ***Auto USB*** with detected media in specified usb target  
-> _- for data safety, this is not fully automated - must select the usb drive manually in GUI_  
-
-4 ***Select*** with user picked Edition, Language, Arch (x86,x64,both) - on specified target  
-> _- implicit choice, includes setup override files (disable by adding `def` to script name)_  
-
-5 ***MCT Defaults*** runs unassisted, creating media without script modification  
-> _- no added files, script passes `products.xml` to MCT and quits without touching media_  
-
-1-4 presets will modify created media in the following ways:  
 > _- write `auto.cmd` to run on demand for auto upgrade with edition switch and skip tpm_  
 > _- write `$ISO$` folder content (if it exists) at the root of the media_  
 > _if you previously used $OEM$ content, must now place it in `$ISO$\sources\$OEM$\`_  
@@ -113,27 +125,22 @@ Presets
 > _- write `sources\EI.cfg` to prevent product key prompt on Windows 11 consumer media (11 only)_  
 > _- write `AutoUnattend.xml` in boot.wim to enable local account on Windows 11 Home (11 only)_  
 > _- patch `winsetup.dll` in boot.wim to remove windows 11 setup checks when booting from media (11 only)_  
-> _- can disable by adding `def` to script name for a default, untouched MCT media_  
 
-Features  
---------
-- **Automatic 25H2 media fetch** from Microsoft Update Metadata Service (FE3)
-  - Queries with device attributes (build, architecture, country, edition, etc.)
-  - Resolves signed URL and downloads 25H2 products.cab
-  - Respects `LANGCODE` environment variable for country/region detection (e.g., `nl-NL` → `IsoCountryShortCode=NL`)
-  - Fallback to host system culture if `LANGCODE` not set
-  - Validates the cabinet signature, so a captive portal or error page cannot be mistaken for a catalog
-  - Falls back to the static Download Center catalog if the service is unreachable, instead of aborting
-  - The MCT executable is resolved through Microsoft's `fwlink`, so it tracks the current tool without link maintenance
-- **TPM Bypass Enhancements** for unsupported hardware scenarios
-  - `HwReqChk` registry key spoofs hardware capabilities in WinPE and upgrade scenarios
-  - LabConfig registry bypasses for: TPM, SecureBoot, RAM, CPU, Storage checks
-  - `AllowUpgradesWithUnsupportedTPMorCPU` for MoSetup-based upgrade scenarios
-  - Maintains existing `appraiserres.dll` and `winsetup.dll` bypass mechanisms
-  - Comprehensive registry configuration in AutoUnattend.xml for automatic application during setup
+### Hardware requirement bypasses
 
-Simple deployment  
------------------   
+Applied through `auto.cmd` and `AutoUnattend.xml`, on top of the existing `appraiserres.dll` and `winsetup.dll`
+mechanisms:
+
+- `HKLM\SYSTEM\Setup\LabConfig` - `BypassTPMCheck`, `BypassSecureBootCheck`, `BypassRAMCheck`, `BypassCPUCheck`,
+  `BypassStorageCheck`
+- `HKLM\SYSTEM\Setup` - `HwReqChk`, for WinPE and upgrade scenarios
+- `HKLM\SYSTEM\Setup\MoSetup` - `AllowUpgradesWithUnsupportedTPMorCPU`, the key Windows actually reads
+
+`bypass11/` holds standalone copies of these plus AveYo's Skip TPM Check, ISO/ESD/WIM toggle and Windows Update
+repair tools. It is a hand-maintained snapshot and is kept in sync with what the script generates.
+
+Simple deployment
+-----------------
 **auto.cmd** is behind ***Auto Upgrade*** preset via GUI  
 Can run it fully unnatended by renaming script with `auto MediaCreationTool.bat`  
 Makes it easy to upgrade keeping files and apps when the OS edition does not match the media  
@@ -145,29 +152,75 @@ then set EditionID in the registry to match; can even force another edition, kee
 On 11, it will try to skip setup checks (can disable this behavior with script var)  
 Finally, it sets recommended setup options with least amount of issues on upgrades  
 
-> Let's say the current OS is Enterprise LTSC 2019, and you use the business media to upgrade:  
-> **auto.cmd** selects Enterprise index and adjust EditionID to Enterprise in the registry (backed up as EditionID_undo)  
-> Maybe you also want to switch edition,  
-> ex. by renaming the script to  `ProfessionalWorkstation MediaCreationTool.bat`:  
-> **auto.cmd** selects Professional index and sets EditionID to ProfessionalWorkstation in the registry.  
->   
-> Let's say the OS is Windows 7 Ultimate or PosReady, and you use the consumer media to upgrade:  
-> **auto.cmd** selects Professional index, and sets EditionID to Professional or Enterprise, respectively.  
-> In all cases, the script tries to pick an existing index, else a compatible one to keep files and apps on upgrade.  
->   
-> Let's say you have a dozen PCs spread with versions: 7, 8.1, 10 and editions: Ultimate, Home, Enterprise LTSB..  
-> If you need to upgrade all to the latest 10 version and only use Pro, you could rename the script as:  
-> `auto 21H2 Pro MediaCreationTool.bat`  
+> Let's say the current OS is Enterprise LTSC 2019, and you use the business media to upgrade:
+> **auto.cmd** selects Enterprise index and adjust EditionID to Enterprise in the registry (backed up as EditionID_undo)
+> Maybe you also want to switch edition,
+> ex. by renaming the script to  `ProfessionalWorkstation MediaCreationTool.bat`:
+> **auto.cmd** selects Professional index and sets EditionID to ProfessionalWorkstation in the registry.
 >
-> Can even add a VL / MAK / retail product key in the same way to take care of licensing differences.  
-> The script also picks up any `$ISO$` folder in the current location - for $OEM$ branding, configuration, tweaks etc.  
+> Let's say the OS is Windows 7 Ultimate or PosReady, and you use the consumer media to upgrade:
+> **auto.cmd** selects Professional index, and sets EditionID to Professional or Enterprise, respectively.
+> In all cases, the script tries to pick an existing index, else a compatible one to keep files and apps on upgrade.
+>
+> Let's say you have a dozen PCs spread with versions: 7, 8.1, 10 and editions: Ultimate, Home, Enterprise LTSB..
+> If you need to upgrade all to the latest 10 version and only use Pro, you could rename the script as:
+> `auto 21H2 Pro MediaCreationTool.bat`
+>
+> Can even add a VL / MAK / retail product key in the same way to take care of licensing differences.
+> The script also picks up any `$ISO$` folder in the current location - for $OEM$ branding, configuration, tweaks etc.
 
-Changelog  
----------  
-_No need to right-click Run as Admin, script will ask itself. Directly saving the Raw files no longer breaks line endings_  
-_We did it! We broke [the previous gist](https://git.io/MediaCreationTool.bat)_ ;) So this is the new home. **Thank you all!**  
+Maintaining the script
+----------------------
+### Adding a version
 
-[discuss on MDL](https://forums.mydigitallife.net/threads/universal-mediacreationtool-wrapper-script-create-windows-11-media-with-automatic-bypass.84168/)  
+Version metadata used to be spread over six places that could silently drift apart - and did. It is now **two**:
+
+1. A row in the `VTABLE` version table near the top - `index:menu-name:alternative-alias`.
+2. The matching `:choice-NN` block with that version's `VER` / `VID` / `CB` / `CT` / `CC` and its `CAB` / `XML` / `EXE`.
+
+The menu list (`VERSIONS`), the default index (`dV`), the last-Windows-10 index (`dV10`), the elevation-restore
+bound, the script-name and commandline aliases, and the `VIS` / `X` display labels are all derived from that table
+at runtime. A menu name beginning with `11_` is what marks a row as Windows 11, so a new row classifies itself.
+
+When 26H2 ships it is one row plus one block:
+
+```
+set VTABLE=%VTABLE% 20:11_26H2:2609
+:choice-20
+set "VER=26300" & set "VID=11_26H2" & set "CB=<build tag>" & set "CT=<yyyy/mm/>" & set "CC=2.1"
+set "CAB=FETCH"
+set "XML=<static Download Center catalog url>"
+set "EXE=https://go.microsoft.com/fwlink/?linkid=2156295"
+goto process
+```
+
+### Traps in this file
+
+Three things look like bugs and are not. All are commented in place:
+
+- `exit /b %errorcode%` in the powershell stubs. `ERRORCODE` is not a cmd variable, so it expands to nothing and
+  the line becomes a bare `exit /b`, preserving powershell's exit code. `%errorlevel%` would expand *before*
+  powershell runs, because the whole `set ... & powershell ... & exit /b` line is expanded in one pass.
+- Anything between a `#:NAME:#` marker pair is `iex`'d as PowerShell - never put `::#` comments there.
+- Anything between `:generate_auto_cmd` / `:generate_AutoUnattend_xml` and their closing `'@` is a here-string
+  written verbatim onto the created media. Editing it changes the generated file.
+
+Also note that a variable set on the same line it is read on will expand to its *previous* value, which is why
+several two-line pairs in this script must stay on two lines.
+
+### The INSERT_BUSINESS CSV
+
+The 420-row CSV block is about 40% of the file and looks like obvious dead weight - hand-maintained hashes for six
+builds from 2016-2021, feeding a url scheme that predates the GUID-based paths modern catalogs use. It still works.
+Business ESDs generated from it were verified on 2026-07-30: 21H1, 20H1 and 1703 return HTTP 200 at 3.86, 3.50 and
+3.31 GB from `b1.download.windowsupdate.com`. Do not trim it on the assumption that it is stale.
+
+Changelog
+---------
+_No need to right-click Run as Admin, script will ask itself. Directly saving the Raw files no longer breaks line endings_
+_We did it! We broke [the previous gist](https://git.io/MediaCreationTool.bat)_ ;) So this is the new home. **Thank you all!**
+
+[discuss on MDL](https://forums.mydigitallife.net/threads/universal-mediacreationtool-wrapper-script-create-windows-11-media-with-automatic-bypass.84168/)
 
 ```
 2018.10.10: reinstated 1809 [RS5]! using native xml patching for products.xml; fixed syntax bug with exit/b
@@ -209,7 +262,7 @@ _We did it! We broke [the previous gist](https://git.io/MediaCreationTool.bat)_ 
 2021.11.03: multiple download methods; improved automation; improved auto.cmd; moved autounattend.xml to boot.wim
             revising 11 setup bypass (wip) - not being content with any methods is the reason why I've not updated in a while
 2021.11.09: skip windows 11 upgrade checks with setup.exe (not just auto.cmd); no server label; local account on 11 home
-            auto.cmd has more fixes to keep files and apps on upgrade; reliable ui automation; alternative downloaders 
+            auto.cmd has more fixes to keep files and apps on upgrade; reliable ui automation; alternative downloaders
 2021.11.15: 11 22000.318
             write output to script folder (or C:\ESD if run from zip); style: more consistent separation of arguments
             20H2 builds with esd size above 4GB that had to be reverted at 19042.631: en,de,es,pt,fr,it,jp,zh (MCT limits)
@@ -225,110 +278,78 @@ _We did it! We broke [the previous gist](https://git.io/MediaCreationTool.bat)_ 
             last squash I promise ;)
 ```
 
-Fork changelog
---------------
+### Fork changelog
+
 ```
-2025.xx.xx: 25H2 support with products.cab fetched live from Microsoft Update Metadata Service (FE3)
+2025.xx.xx: 25H2 support with products.cab fetched live from the Update Metadata Service (FE3)
             TPM bypass enhancements: HwReqChk, LabConfig, MoSetup AllowUpgradesWithUnsupportedTPMorCPU
-2026.07.29: 25H2 media refreshed to 26200.8875 (260711-1836) - was 26200.6899 (251011-1532)
-            MCT exe now resolved via fwlink 2156295 instead of a hardcoded GUID url
+
+2026.07.29: media currency
+            25H2 refreshed to 26200.8875 (260711-1836), was 26200.6899 (251011-1532)
+            MCT exe resolved via fwlink 2156295 instead of a hardcoded GUID url
             static Download Center catalog added as fallback when the live FE3 fetch fails
-            fetched cab is validated (MSCF signature) before it is trusted
-            catalogs from a previous run are cleared first - a failed download could reuse another version's products.xml
-            the catalog's real media build is printed when it differs from the hardcoded menu label
-            corrected the INSERT_BUSINESS comment: the CSV only ever applied to 14393,15063,18363,19041,19042,19043
-            version metadata consolidated into one VTABLE - menu, aliases, dV and VIS/X are now derived from it
-            FETCH_25H2_CAB renamed FETCH_CAB and made version-neutral; its FE3 spoof constants are documented
-              and overridable via FETCH_TARGET / FETCH_OSVER / FETCH_LCU, so 26H2 needs no code change
+            fetched cab validated by MSCF signature before it is trusted
+            catalogs from a previous run cleared first - a failed download could reuse another version's xml
+            the catalog's real media build is printed when it differs from the menu label
+            FETCH_25H2_CAB renamed FETCH_CAB, made version-neutral; its FE3 constants are documented as deliberate
+              spoof values and overridable via FETCH_TARGET / FETCH_OSVER / FETCH_LCU
             TLS 1.3 selection made conditional - referencing it on pre-.NET-4.8 hosts threw and killed the fetch
-            documented that `exit /b %errorcode%` in the powershell stubs is deliberate, not a typo
-            FIXED: every Windows 11 selection (index 15-19) was discarded when the script self-elevated, because
-              the restore used a hardcoded "lss 15" bound left over from when 14 Windows 10 versions existed -
-              the version dialog reappeared after the UAC prompt. Bound now comes from the table.
-            FIXED: AutoUnattend.xml wrote AllowUpgradesWithUnsupportedTPMorCPU to
-              HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Setup\MoSetup, which is not the key Windows reads.
-              Corrected to HKLM\SYSTEM\Setup\MoSetup, matching auto.cmd and Microsoft's documented location.
-2026.07.30: FIXED: the REG_EDITION else-branch was `else set (REG_EDITION=)` - malformed, so it created a variable
-              named "(REG_EDITION" and never cleared REG_EDITION. An inherited value could have leaked into the
-              1703-and-earlier registry edition workaround. REG_EDITION also added to the startup undefine list.
-              Credit: independently found in the Pingasmaster fork.
-            DOWNLOAD now tries https BEFORE http instead of after. The old order meant the MCT executable - which
-              is subsequently run elevated - was requested in plaintext first, and was interceptable on a hostile
-              network. http is kept as a last-resort fallback rather than removed, because some retired Microsoft
-              paths still answer only over http.
-            Added a catalog sanity guard: products.xml must contain entries for the selected VER, else the run stops
-              with a clear message instead of letting MCT author media for a different build. Verified against all
-              16 reachable catalogs (1703-25H2) - each contains exactly one build family matching its VER, so the
-              guard cannot false-positive on a working version.
-            Asking for `arm64` now stops with the reason instead of silently building x64 media. Tested against
-              real MCT: SetupHost rejects /MediaArch arm64 with 0xC190010D, an invalid launch option, so ARM64
-              media cannot be produced by this tool at all - see the ARM64 section above.
-            The five entries whose Microsoft sources are gone now fail fast with the reason, before elevating,
-              instead of grinding through every download method and then waiting on a keypress.
-            FIXED: the generated auto.cmd launched `sources\setup.exe` from a working directory that was already
+            version metadata consolidated into one VTABLE
+
+            fixes
+            every Windows 11 selection (15-19) was discarded when the script self-elevated: the restore used a
+              hardcoded "lss 15" bound left from when 14 Windows 10 versions existed, so the version dialog
+              reappeared after the UAC prompt
+            AutoUnattend.xml wrote AllowUpgradesWithUnsupportedTPMorCPU to
+              HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Setup\MoSetup, which is not the key Windows reads;
+              corrected to HKLM\SYSTEM\Setup\MoSetup
+
+2026.07.30: security and robustness
+            DOWNLOAD tries https before http; the old order requested the MCT executable - later run elevated - in
+              plaintext first. http kept as last resort, as some retired Microsoft paths answer only over http
+            catalog sanity guard: products.xml must contain entries for the selected VER, else the run stops with a
+              clear message instead of letting MCT author media for a different build. Verified against all 16
+              reachable catalogs (1703-25H2), each of which contains exactly one build family matching its VER
+            the five entries with retired sources fail fast, before elevating, with the reason
+            asking for arm64 stops with the reason - MCT rejects /MediaArch arm64 with 0xC190010D
+            MakeISO checks its runtime C# compile; failure previously surfaced as a missing [dir2iso] type after
+              the multi-GB download and the entire media layout had completed
+
+            fixes
+            the REG_EDITION else-branch was `else set (REG_EDITION=)` - malformed, so it created a variable named
+              "(REG_EDITION" and never cleared REG_EDITION. Credit: independently found in the Pingasmaster fork
+            the generated auto.cmd launched `sources\setup.exe` from a working directory that was already
               <media>\sources, so it resolved to <media>\sources\sources\setup.exe and never existed. Confirmed
-              against real 25H2 media. Now uses setup.exe with ..\setup.exe as fallback. Upstream bug.
-            Build numbers in auto.cmd are compared numerically; the quoted gtr/lss forms were string comparisons
-              that only happened to work because every media build is five digits.
-            The pre-10 'auto' target is derived from the table as the last Windows 10 row instead of a hardcoded
-              index. That moves it from 21H2 to 22H2 (19045), the final Windows 10 release.
-            Removed a dead `set /a Version=` line from the auto.cmd template.
-            .gitignore no longer excludes .github/ - CI workflows could never be committed - nor blanket *.json.
-            bypass11/ resynced with what the script generates, and three upstream defects fixed in
-              Quick_11_iso_esd_wim_TPM_toggle.bat: a bare `break` outside any loop, a stray `$t;` that dumped the
-              whole WIM XML to the console, and use of $input, which is a PowerShell automatic variable.
-            The elevation shim in Skip_TPM_Check_on_Dynamic_Update.cmd and windows_update_refresh.bat now removes
-              the HKCU .Admin class association and its temp file, which were left registered permanently.
-            The arm64 refusal now happens before self-elevation, alongside the retired-source refusal, so it no
-              longer raises a UAC prompt only to decline a moment later.
-            MakeISO checks whether its runtime C# compile succeeded. A failure previously surfaced as a missing
-              [dir2iso] type - after the multi-GB download and the entire media layout had finished.
-            auto.cmd and AutoUnattend.xml are emitted by a single powershell instance that reads this file once,
-              instead of two spawns each re-reading it. Output verified byte-identical.
-            Verified, no change needed: the 420-row INSERT_BUSINESS CSV still resolves. Sample business ESDs for
-              21H1, 20H1 and 1703 return HTTP 200 at 3.86 / 3.50 / 3.31 GB, so the block is live, not dead weight
-              - worth knowing before anyone trims it for being 40% of the file.
+              against real 25H2 media. Upstream bug
+            build numbers in auto.cmd compared numerically; the quoted gtr/lss forms were string comparisons that
+              only worked because every media build is five digits
+            the pre-10 'auto' target derives from the table as the last Windows 10 row instead of a hardcoded 13,
+              moving it from 21H2 to 22H2 (19045), the final Windows 10 release
+            removed a dead `set /a Version=` line from the auto.cmd template
+            .gitignore no longer excludes .github/, which meant CI workflows could never be committed
+            bypass11/ resynced with what the script generates; three upstream defects fixed in
+              Quick_11_iso_esd_wim_TPM_toggle.bat - a bare `break` outside any loop, a stray `$t;` that dumped the
+              whole WIM XML to the console, and use of $input, a PowerShell automatic variable
+            the elevation shim in Skip_TPM_Check_on_Dynamic_Update.cmd and windows_update_refresh.bat removes the
+              HKCU .Admin class association and its temp file instead of leaving them registered
+
+            housekeeping
+            auto.cmd and AutoUnattend.xml emitted by one powershell instance that reads this file once, rather than
+              two spawns each re-reading it; output verified byte-identical
+            verified and left alone: the INSERT_BUSINESS CSV still resolves - see "The INSERT_BUSINESS CSV" above
 ```
 
-Notes from surveying the fork network
--------------------------------------
-Upstream has ~3,100 forks and has been dormant since 2024-08-15. Most are untouched copies - several of the
+Appendix: the fork network
+--------------------------
+Upstream has ~3,100 forks and has been dormant since 2024-08-15. Most are untouched copies; several of the
 top-starred ones are byte-identical to upstream. Only a handful carry real changes, and two were worth mining:
 
-- **Pingasmaster** independently found the `REG_EDITION` else-set bug and the http-before-https ordering, both now
+- **Pingasmaster** independently found the `REG_EDITION` else-set bug and the http-before-https ordering, both
   fixed here. They also added a products.xml build check, generalised here to derive the expected build from `VER`.
   Note they changed `LICENSE` to their own copyright, which MIT does not permit - this fork keeps AveYo's notice.
-- **Jettcodey** is the only fork that revives the dead `1507` / `1511` / `1607` / `1803` / `1809` entries, by
-  re-hosting every file on `mct-files.de` (verified working). The cost is steep: 42 third-party urls against 5
-  Microsoft ones, no integrity verification, and the script's "nothing but Microsoft-hosted source links" claim had
-  to be rewritten. Not adopted. If mirroring is ever added here it should be opt-in and SHA-256 pinned, so the
-  trust property that mirroring removes is restored by verification.
+- **Jettcodey** is the only fork that revives the five dead entries, by re-hosting every file on `mct-files.de`
+  (verified working). The cost is steep: 42 third-party urls against 5 Microsoft ones, no integrity verification,
+  and the "nothing but Microsoft-hosted source links" claim had to be rewritten. Not adopted. If mirroring is ever
+  added here it should be opt-in and SHA-256 pinned, so verification restores the trust that mirroring removes.
 
 No fork surveyed does live catalog fetching - they all hardcode a static catalog url, which is why they go stale.
-None does ARM64 either, which remains the largest functional gap in all of them.
-
-Known broken
-------------
-All 40 source urls in the version table were probed on **2026-07-29**. Five are dead, taking five of the nineteen
-menu entries with them. Microsoft retired the hosts/paths; there are no replacement urls, so these are documented
-rather than fixed. Everything from `1703` onward works, apart from `1803` / `1809`.
-
-| Choice | Dead source | Why |
-| --- | --- | --- |
-| `1507` | catalog XML | `wscont.apps.microsoft.com` no longer resolves (NXDOMAIN) |
-| `1511` | catalog XML | same host |
-| `1607` | catalog CAB | same host |
-| `1803` | MCT executable | `software-download.microsoft.com/download/pr/MediaCreationTool1803.exe` → HTTP 400 |
-| `1809` | MCT executable | `.../MediaCreationTool1809.exe` → HTTP 400 |
-
-These five now **fail fast**. Each carries a `DEAD` marker and the script stops at once, before elevating, with the
-reason printed — instead of working through four download methods over two schemes and then hanging on a keypress.
-Selecting `1803` exits in about a second. If Microsoft ever restores a source, delete that entry's `DEAD` line.
-
-`bypass11/` is a hand-maintained snapshot of the generated files. It had drifted and has been resynced: `auto.cmd`
-now carries the `HwReqChk` write and the WinPE path fix, and `AutoUnattend.xml` now has both `HwReqChk` and the
-`MoSetup` entry (10 bypass commands, was 5), matching what the script generates.
-- Media built by this script carries a deliberate Windows Update pin (`TargetReleaseVersion` +
-  `TargetReleaseVersionInfo=25H1`). `25H1` is **not a typo** — AveYo points the pin at a version that never
-  existed to suppress the unsupported-hardware nag. Side effect: installed machines are not offered feature
-  updates until that policy is cleared. Quality and security updates are unaffected.
