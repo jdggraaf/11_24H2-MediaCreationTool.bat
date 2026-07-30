@@ -89,9 +89,6 @@ call :reg_query "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion" "ProductName
 call :reg_query "HKU\S-1-5-18\Control Panel\Desktop\MuiCached" "MachinePreferredUILanguages" OS_LANGCODE
 for %%s in (%OS_LANGCODE%) do set "OS_LANGCODE=%%s"
 set "OS_ARCH=x64" & if "%PROCESSOR_ARCHITECTURE:~-2%" equ "86" if not defined PROCESSOR_ARCHITEW6432 set "OS_ARCH=x86"
-::# detect an ARM64 host - it previously fell through to x64, which is media that cannot install on ARM hardware
-if /i "%PROCESSOR_ARCHITECTURE%" equ "ARM64" set "OS_ARCH=arm64"
-if /i "%PROCESSOR_ARCHITEW6432%" equ "ARM64" set "OS_ARCH=arm64"
 
 ::# parse MCT choice from script name or commandline - accepts both formats: 1909 or 19H2 etc.
 for %%r in (%VTABLE%) do for /f "tokens=1-3 delims=:" %%a in ("%%r") do for %%s in (%MCT% %~n0 %*) do (
@@ -420,12 +417,18 @@ if defined MEDIA for %%s in (%MEDIA_LANGCODE%) do (set LANGCODE=%%s)
 if defined MEDIA for %%s in (%MEDIA_EDITION%) do (set EDITION=%%s)
 if defined MEDIA for %%s in (%MEDIA_ARCH%) do (set ARCH=%%s)
 if defined MEDIA for %%s in (%MEDIA_KEY%) do (if not defined KEY set KEY=%%s)
-::# windows 11 has no x86 media, so clamp x86 up to x64 - but leave x64 AND arm64 alone. This used to force x64
-::# unconditionally, which is why arm64 could never be selected even though half of every 11 catalog is ARM64.
+::# windows 11 has no x86 media, so clamp x86 up to x64. Narrower than the old unconditional "set MEDIA_ARCH=x64",
+::# which also overwrote a deliberate choice; arm64 now falls through to the explicit refusal just below.
 if %VER% geq 22000 if /i "%MEDIA_ARCH%" equ "x86" set "MEDIA_ARCH=x64"
 if %VER% geq 22000 if /i "%ARCH%" equ "x86" set "ARCH=x64"
-::# no arm64 clamp for 10: Windows 10 on ARM media is real. Verified 2026-07-30 that the 22H2 catalog carries 1064
-::# ARM64 entries and that 19045.3803...A64FRE_en-us.esd is live on Microsoft's CDN at 3.66 GB.
+::# MCT cannot build ARM64 media: SetupHost rejects /MediaArch arm64 with 0xC190010D, an invalid launch option.
+::# Verified 2026-07-30 in C:\Windows\Logs\MoSetup\BlueBox.log - x86, x64 and both are the only accepted values.
+::# Refuse with the reason rather than passing a flag that makes MCT die with an opaque error.
+if /i "%MEDIA_ARCH%" equ "arm64" %<%:4f " UNSUPPORTED "%>>% & %<%:0f " MCT rejects /MediaArch arm64 and cannot build ARM64 media "%>%
+if /i "%MEDIA_ARCH%" equ "arm64" echo;& %<%:0f " Get ARM64 media from Microsoft's Windows 11 download page, or build it with UUP dump "%>%
+if /i "%MEDIA_ARCH%" equ "arm64" echo;& timeout /t 15 & exit /b 1
+::# For the record, the ARM64 media itself is real and published - the 22H2 catalog carries 1064 ARM64 entries and
+::# 19045.3803...A64FRE_en-us.esd is live on Microsoft's CDN at 3.66 GB. MCT just refuses to author it.
 
 ::# windows 11 vs 10 label - VID carries the family as an 11_ prefix, so both fall out of one substitution
 ::# keep these on two lines: %VIS% on the same line as its own `set` would still expand to the previous value
@@ -1204,7 +1207,6 @@ set ^ #=;$f0=[io.file]::ReadAllText($env:0); $0=($f0-split '#\:PRODUCTS_XML\:' ,
 set ^ #=& set "0=%~f0"& set 1=;PRODUCTS_XML %*& powershell -nop -c "%#%"& exit /b
 function PRODUCTS_XML { [xml]$xml = [io.file]::ReadAllText("$pwd\products.xml",[Text.Encoding]::UTF8); $root = $null
  $eulas = 0; $langs = 0; $ver = $env:VER; $vid = $env:VID; $X = $env:X; if ($X-eq'11') {$vid = "11 $env:VIS"}
- $arm = ($env:MEDIA_ARCH -eq 'arm64')   #:: keep ARM64 catalog entries only when arm64 media was requested
  $url = "http://b1.download.windowsupdate.com/"
 #:: apply/insert Catalog version attribute for MCT compatibility
  if ($null -ne $xml.SelectSingleNode('/MCT')) {
@@ -1241,10 +1243,9 @@ function PRODUCTS_XML { [xml]$xml = [io.file]::ReadAllText("$pwd\products.xml",[
  $BUSINESS = "$vid Pro | Edu | Enterprise"
  $root.Files.File | & { process {
    $_arch = $_.Architecture; $_lang = $_.LanguageCode; $_edi = $_.Edition; $_loc = $_.Edition_Loc; $ok = $true
-  #:: ARM64 entries are kept only when arm64 was actually asked for - roughly half of every 11 catalog is ARM64, and
-  #:: dropping them unconditionally is what made arm64 media impossible. Default stays x64, so nothing regresses.
-   if (-not $arm -and $_arch -eq 'ARM64') {$root.Files.RemoveChild($_) >$null; return}
-   if ($ver -lt 22000 -and $_loc -eq '%BASE_CHINA%') {$root.Files.RemoveChild($_) >$null; return}
+  #:: clear ARM64 and %BASE_CHINA% entries - MCT cannot author ARM64 media (see the arm64 refusal above), so the
+  #:: entries would be unusable even though roughly half of every 11 catalog is ARM64
+   if ($_arch -eq 'ARM64' -or ($ver -lt 22000 -and $_loc -eq '%BASE_CHINA%')) {$root.Files.RemoveChild($_) >$null; return}
   #:: unhide combined business editions in xml that include them: 1709 - 21H1; unhide Education on 1507 - 1511; better label
    if ($env:UNHIDE_BUSINESS -ge 1) {
      if ($_edi -eq 'Enterprise' -or $_edi -eq 'EnterpriseN') {$_.IsRetailOnly = 'False'; $_.Edition_Loc = $BUSINESS}

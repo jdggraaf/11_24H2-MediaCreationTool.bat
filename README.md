@@ -30,24 +30,30 @@ Windows 10 22H2 media is final at `19045.3803` and will not change — Windows 1
 
 Because the live fetch always returns whatever Microsoft currently publishes, 25H2 media stays current on its own — the hardcoded build is only a label, and the script now prints the catalog's real build when the two differ.
 
-ARM64 media
------------
-Roughly **half of every Windows 11 catalog is ARM64** — 1140 of 2282 entries for 25H2 — and all of it used to be
-thrown away, so arm64 media could not be built at all. Windows 10 on ARM is real too: the 22H2 catalog carries 1064
-ARM64 entries and `19045.3803...A64FRE_en-us.esd` is live on Microsoft's CDN at 3.66 GB.
+ARM64 media: not possible with this tool
+----------------------------------------
+Roughly **half of every Windows 11 catalog is ARM64** — 1140 of 2282 entries for 25H2 — and the ARM64 media is
+genuinely published: the Windows 10 22H2 catalog carries 1064 ARM64 entries, and `19045.3803...A64FRE_en-us.esd`
+is live on Microsoft's CDN at 3.66 GB. It is tempting to conclude the tool could build arm64 media.
 
-ARM64 is **opt-in**, so nothing changes unless you ask for it:
+**It cannot.** Tested against real MCT on 2026-07-30:
 
 ```
-arm64 iso MediaCreationTool.bat          rem or pass arm64 on the commandline
+SetupHost.Exe ... "/MediaArch" "x64"     -> runs, media created
+SetupHost.Exe ... "/MediaArch" "arm64"   -> Process exit code: [0xC190010D]
 ```
 
-An ARM64 *host* is now detected as arm64 as well — it previously fell through to x64, which is media that cannot
-install on ARM hardware. x86 is still clamped up to x64 for Windows 11, which genuinely has no x86 media.
+`0xC190010D` is a MoSetup invalid-launch-option error, logged in `C:\Windows\Logs\MoSetup\BlueBox.log`. MCT accepts
+only `x86`, `x64` and `both`. No amount of catalog manipulation changes that — the refusal happens in SetupHost
+before any catalog is read.
 
-> Caveat: the catalog side is verified — ARM64 entries survive, `/MediaArch arm64` is passed to MCT, and x64
-> behaviour is byte-for-byte unchanged (1142 entries either way). Whether MCT itself accepts `/MediaArch arm64`
-> end-to-end has **not** been tested here, since that means a separate 5.9 GB ARM64 download.
+So asking for `arm64` now **stops immediately with that reason** rather than silently producing x64 media (what the
+script used to do, since `arm64` was not even parsed as an architecture) or passing a flag that makes MCT die with
+an opaque error. For real ARM64 media use Microsoft's Windows 11 download page, which publishes ARM64 ISOs
+directly, or build one with UUP dump.
+
+The x86 clamp for Windows 11 is now narrower as a side effect: it only promotes `x86` to `x64` instead of
+overwriting whatever architecture was chosen.
 
 Adding a new version
 --------------------
@@ -254,8 +260,9 @@ Fork changelog
               with a clear message instead of letting MCT author media for a different build. Verified against all
               16 reachable catalogs (1703-25H2) - each contains exactly one build family matching its VER, so the
               guard cannot false-positive on a working version.
-            ARM64 media support, opt-in via `arm64` - see the ARM64 section above. Half of every 11 catalog was
-              being discarded. ARM64 hosts are now detected instead of falling through to unusable x64 media.
+            Asking for `arm64` now stops with the reason instead of silently building x64 media. Tested against
+              real MCT: SetupHost rejects /MediaArch arm64 with 0xC190010D, an invalid launch option, so ARM64
+              media cannot be produced by this tool at all - see the ARM64 section above.
             The five entries whose Microsoft sources are gone now fail fast with the reason, before elevating,
               instead of grinding through every download method and then waiting on a keypress.
             FIXED: the generated auto.cmd launched `sources\setup.exe` from a working directory that was already
