@@ -6,7 +6,7 @@ A powerful yet simple windows 10 / 11 deployment automation tool as well!
 > **About this fork.** Original work by [AveYo](https://github.com/AveYo/MediaCreationTool.bat), whose repository is
 > the upstream and the source of everything from 1507 through 24H2. This fork (`jdggraaf`, via `lzw29107`) adds
 > Windows 11 25H2 with a live catalog fetch, the extended TPM bypasses, and the fixes in the fork changelog below.
-> The in-script `latest_MCT.url` shortcut still points at AveYo's repo by design. Screenshot predates the 25H2 entry.
+> The in-script `latest_MCT.url` shortcut still points at AveYo's repo by design.
 
 Contents: [Quick start](#quick-start) · [What you get](#what-you-get) · [Known limitations](#known-limitations) ·
 [What it changes on the media](#what-it-changes-on-the-media) · [Deployment](#simple-deployment) ·
