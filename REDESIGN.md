@@ -33,7 +33,11 @@ After: `#:SETUP_GUI:#` (WinForms, Windows PowerShell 5.1 compatible) shows one w
 +-----------------------------------------------------------------------------------------+
 ```
 
-- Enter = Start, Esc = Cancel, Start is disabled while a typed key is not `XXXXX-XXXXX-XXXXX-XXXXX-XXXXX`.
+- Enter = Start, Esc = Cancel, Start is disabled while a typed key or language code is malformed.
+- Select greys out Edition/Language/Arch/Key (MCT asks for them itself); MCT Defaults also greys out the extras, so the
+  window never collects a value the script would discard.
+- Remember writes the chosen version and options; the action is remembered only for Auto Upgrade and Auto ISO, and
+  those then start straight away like the `auto` / `iso` script-name keywords.
 - The window is preselected from the script name, commandline or ini, so `11_25H2 MediaCreationTool.bat` opens it
   with 25H2 already chosen instead of showing only the preset list.
 - Result is one line `mct pre edition langcode arch key no_update def save` ("-" = auto), read by a `for /f`.

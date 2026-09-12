@@ -160,6 +160,7 @@ if not defined LEGACY if not defined PRE set GUI=1
 if defined GUI if defined MCT set /a dV=%MCT%
 if defined GUI if defined PRE set /a dP=%PRE%
 if defined GUI call :SETUP_GUI
+if defined GUI if %MCT%0 gtr 9 for /f "tokens=%MCT% delims=," %%v in ("%VERSIONS%") do set "VID=%%v"
 if defined GUI_EDITION if "%GUI_EDITION%" neq "-" set "EDITION=%GUI_EDITION%" & set "MEDIA_EDITION=%GUI_EDITION%"
 if defined GUI_LANGCODE if "%GUI_LANGCODE%" neq "-" set "LANGCODE=%GUI_LANGCODE%" & set "MEDIA_LANGCODE=%GUI_LANGCODE%"
 if defined GUI_ARCH if "%GUI_ARCH%" neq "-" set "ARCH=%GUI_ARCH%" & set "MEDIA_ARCH=%GUI_ARCH%"
@@ -329,7 +330,8 @@ echo;   def        plain MCT media without the script extras (tpm bypass, auto.c
 echo;   hide       hide the console while MCT works     legacy   classic two-step dialogs     help   this text
 echo;
 echo; MediaCreationTool.ini next to the script keeps defaults (KEY=VALUE per line, same names as above: MCT AUTO ISO EDITION
-echo; LANGCODE ARCH KEY NO_UPDATE DEF) - the setup window writes it for you when "Remember these choices" is ticked.
+echo; LANGCODE ARCH KEY NO_UPDATE DEF) - the setup window writes it for you when "Remember these choices" is ticked
+echo; (the action is remembered for Auto Upgrade and Auto ISO only - those then start without the window).
 echo;
 pause & exit /b
 
@@ -338,7 +340,10 @@ pause & exit /b
 for %%d in ("%ROOT%" "%WORK%") do if exist "%%~d\" (
  echo;; MediaCreationTool.ini - defaults for MediaCreationTool.bat, written by the setup window "Remember these choices"
  echo;; delete this file or untick the option to get auto detection back - run the script with "help" for all names
+ echo;; AUTO=1 / ISO=1 make the script start that action straight away, without the setup window
  if defined VID echo;MCT=%VID%
+ if %PRE% equ 1 echo;AUTO=1
+ if %PRE% equ 2 echo;ISO=1
  if defined EDITION echo;EDITION=%EDITION%
  if defined LANGCODE echo;LANGCODE=%LANGCODE%
  if defined ARCH echo;ARCH=%ARCH%
@@ -1250,12 +1255,17 @@ function SETUP_GUI {
  $chk = { $k = "$($tbK.Text)".Trim(); $l = "$($cbL.Text)".Trim()
   $ok.Enabled = (($k -eq '' -or $k -match '^[A-Z0-9]{5}(-[A-Z0-9]{5}){4}$') -and ($l -like 'Auto*' -or $l -match '^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8}){1,2}$')) }
  $tbK.Add_TextChanged($chk); $cbL.Add_TextChanged($chk); & $chk
+ # Select lets MCT ask for edition / language / arch itself; MCT Defaults adds no extras at all - grey out what would be ignored
+ $mode = { $p = 1; for ($i = 0; $i -lt $rbs.Count; $i++) { if ($rbs[$i].Checked) { $p = $i + 1 } }
+  foreach ($c in $cbE, $cbL, $cbA, $tbK) { $c.Enabled = ($p -le 3) }; foreach ($c in $ckU, $ckX) { $c.Enabled = ($p -le 4) } }
+ foreach ($rb in $rbs) { $rb.Add_CheckedChanged($mode) }; & $mode
 
  if ($f.ShowDialog() -ne 'OK') { return '0 0 - - - - - - -' }
  $mct = $vids.Count - $lb.SelectedIndex; $pre = 1; for ($i = 0; $i -lt $rbs.Count; $i++) { if ($rbs[$i].Checked) { $pre = $i + 1 } }
- function Val ($cb) { $t = "$($cb.Text)".Trim(); if ($cb.SelectedIndex -eq 0 -or $t -like 'Auto*' -or $t -eq '') { '-' } else { $t } }
- $key = "$($tbK.Text)".Trim(); if ($key -eq '') { $key = '-' }
- $noupd = if ($ckU.Checked) { '-' } else { 'no_update' }; $def = if ($ckX.Checked) { '-' } else { 'def' }; $save = if ($ckS.Checked) { 'save' } else { '-' }
+ function Val ($cb) { $t = "$($cb.Text)".Trim(); if (-not $cb.Enabled -or $cb.SelectedIndex -eq 0 -or $t -like 'Auto*' -or $t -eq '') { '-' } else { $t } }
+ $key = "$($tbK.Text)".Trim(); if ($key -eq '' -or -not $tbK.Enabled) { $key = '-' }
+ $noupd = if ($ckU.Checked -or -not $ckU.Enabled) { '-' } else { 'no_update' }; $def = if ($ckX.Checked -or -not $ckX.Enabled) { '-' } else { 'def' }
+ $save = if ($ckS.Checked) { 'save' } else { '-' }
  "$mct $pre $(Val $cbE) $(Val $cbL) $(Val $cbA) $key $noupd $def $save"
 } #:SETUP_GUI:#  single-window setup dialog returning: mct pre edition langcode arch key no_update def save
 
