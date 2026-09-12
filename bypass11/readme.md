@@ -1,8 +1,8 @@
 Get 11 on 'unsupported' PC via Windows Update or mounted ISO (no patching needed)  
 ---------------------------------------------------------------------------------  
 Step 1: use [Skip_TPM_Check_on_Dynamic_Update.cmd](Skip_TPM_Check_on_Dynamic_Update.cmd) to automatically bypass setup requirements  
-_It's a set it and forget it script, with built-in undo - v7 using more reliable /Product Server trick_  
-_V9 rebased on cmd due to defender transgression; skips already patched media (0b)_  
+_It's a set it and forget it script, with built-in undo, using more reliable /Product Server trick_  
+_rebased on cmd due to defender transgression; skips already patched media (0b) - self-identifies as V13, 2023.12.07_  
 
 Step 2: use [OfflineInsiderEnroll](https://github.com/abbodi1406/offlineinsiderenroll) to subscribe to the channel you want  
 _while on 10, use BETA for Windows 11 22000.x builds (release), DEV for Windows 11 225xx.x builds (experimental)_  
@@ -42,6 +42,9 @@ for consumer / core media you can add a generic `EI.cfg` to the media\sources yo
 > _gvlkprofessional=W269N-WFGWX-YVC9B-4J6C9-T83GX gvlkcore=TX9XD-98N7V-6WMQ6-BX7FG-H8Q99_  
 > _gvlkenterprise=NPPR9-FWDCX-D2C8J-H872K-2YT43 gvlkeducation=NW6C2-QMPVW-D7KKK-3GKT6-VCFB2 etc._  
 
+> running the script bare (no arguments) installs its SendTo shortcut, or uninstalls it if already installed - see script lines 7-18  
+> pass a second commandline argument, `1` or `0`, to force patch or undo instead of auto-toggling - see script lines 20-21  
+
 i: [Skip_TPM_Check_on_Dynamic_Update.cmd](Skip_TPM_Check_on_Dynamic_Update.cmd) acts globally and **skips setup.exe upgrade checks as well**  
 _regardless of mounted iso / usb media already having a bypass added or not_  
 
@@ -55,6 +58,6 @@ _If you have already connected at OOBE, can try email: `a` password: `a` to swit
 
 Manage and troubleshoot Windows Update on any windows version and edition  
 -------------------------------------------------------------------------  
-Use [windows_update_refresh.bat](https://pastebin.com/XQsgjt9p) to clear pending updates (including sneaky feature upgrades)  
+Use [windows_update_refresh.bat](windows_update_refresh.bat) to clear pending updates (including sneaky feature upgrades)  
 Use [windows_drivers_update_toggle.bat](https://pastebin.com/cK8y4YEX) to block driver updates even on Home editions  
 Use [windows_feature_update_toggle.bat](https://pastebin.com/EcLB14hg) to block feature upgrades on 1507 - 21H2 even on Home editions!  

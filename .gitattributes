@@ -1,1 +1,8 @@
+# CRLF must be preserved byte-for-byte in these files: cmd.exe treats a stray
+# LF as command corruption (e.g. inside a here-doc-style PowerShell block), so
+# git must never normalize or diff-convert line endings here. `-text` tells
+# git to leave line endings alone and skip text-diff normalization entirely.
 * -text
+*.bat -text
+*.cmd -text
+*.xml -text

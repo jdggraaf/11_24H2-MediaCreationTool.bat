@@ -4,6 +4,11 @@
 :: Ingenious support for business editions (Enterprise / VL) selecting language, x86, x64 or AiO inside the MCT GUI
 :: 25H2 CAB dynamically fetched from Microsoft Update Metadata Service with LANGCODE support
 :: TPM Bypass Enhancements with HwReqChk, LabConfig, and MoSetup registry configurations
+:: Changelog: 2026.09.12 stable
+:: - DOWNLOAD now tries HTTPS before HTTP (closes MITM downgrade window before MCT exe runs)
+:: - MediaCreationTool exe is Authenticode-verified (Valid, Microsoft Corporation signer) before it is started
+:: - FETCH_25H2_CAB derives LcuVersion/MediaVersion from the target release build/ubr (CB), and EditionId/CompositionEditionId from %EDITION%/registry instead of unrelated hardcoded literals
+:: - unattend now also sets ProductVersion alongside TargetReleaseVersion(Info) for the update-nag bypass policy
 :: Changelog: 2026.01.15 stable
 :: - TPM Bypass Enhancements: HwReqChk, LabConfig (TPM/SecureBoot/RAM/CPU/Storage checks), MoSetup AllowUpgradesWithUnsupportedTPMorCPU
 :: - 25H2 dynamic CAB fetch from FE3 (respects LANGCODE for country detection)
@@ -402,6 +407,10 @@ set "/hint=Check urls in browser | del ESD dir | use powershell v3.0+ | unblock 
 echo;& set err=& for %%s in (products.xml MediaCreationTool%VID%.exe) do if not exist %%s set err=1
 if defined err (%<%:4f " ERROR "%>>% & %<%:0f " %/hint% "%>%) else if not defined err %<%:0f " %PRESET% "%>%
 if defined err (del /f /q products%VID%.* MediaCreationTool%VID%.exe 2>nul & pause & exit /b1)
+
+::# verify MediaCreationTool exe is genuinely signed by Microsoft before running it
+powershell -nop -c "$s=Get-AuthenticodeSignature 'MediaCreationTool%VID%.exe'; if ($s.Status -ne 'Valid' -or $s.SignerCertificate.Subject -notmatch 'Microsoft Corporation') {exit 1}"
+if errorlevel 1 (%<%:4f " ERROR "%>>% & %<%:0f " MediaCreationTool%VID%.exe failed Authenticode signature check "%>% & del /f /q MediaCreationTool%VID%.exe 2>nul & pause & exit /b1)
 
 ::# configure products.xml in one go via powershell snippet - most of the MCT fixes happen there
 call :PRODUCTS_XML
@@ -859,28 +868,31 @@ function WIM_INFO ($file = 'install.esd', $index = 0, $out = 0) { :info while ($
       <RunSynchronousCommand wcm:action="add"><Order>3</Order>
         <Path>reg add HKLM\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate /v TargetReleaseVersionInfo /d 25H1 /f</Path>
       </RunSynchronousCommand>
-      <!-- TPM and hardware requirement bypass for WinPE and upgrade scenarios -->
       <RunSynchronousCommand wcm:action="add"><Order>4</Order>
+        <Path>reg add HKLM\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate /v ProductVersion /d "Windows 11" /t reg_sz /f</Path>
+      </RunSynchronousCommand>
+      <!-- TPM and hardware requirement bypass for WinPE and upgrade scenarios -->
+      <RunSynchronousCommand wcm:action="add"><Order>5</Order>
         <Path>reg add HKLM\SYSTEM\Setup /v HwReqChk /t reg_dword /d 1 /f</Path>
       </RunSynchronousCommand>
       <!-- LabConfig registry bypasses for hardware checks -->
-      <RunSynchronousCommand wcm:action="add"><Order>5</Order>
+      <RunSynchronousCommand wcm:action="add"><Order>6</Order>
         <Path>reg add HKLM\SYSTEM\Setup\LabConfig /v BypassTPMCheck /t reg_dword /d 1 /f</Path>
       </RunSynchronousCommand>
-      <RunSynchronousCommand wcm:action="add"><Order>6</Order>
+      <RunSynchronousCommand wcm:action="add"><Order>7</Order>
         <Path>reg add HKLM\SYSTEM\Setup\LabConfig /v BypassSecureBootCheck /t reg_dword /d 1 /f</Path>
       </RunSynchronousCommand>
-      <RunSynchronousCommand wcm:action="add"><Order>7</Order>
+      <RunSynchronousCommand wcm:action="add"><Order>8</Order>
         <Path>reg add HKLM\SYSTEM\Setup\LabConfig /v BypassRAMCheck /t reg_dword /d 1 /f</Path>
       </RunSynchronousCommand>
-      <RunSynchronousCommand wcm:action="add"><Order>8</Order>
+      <RunSynchronousCommand wcm:action="add"><Order>9</Order>
         <Path>reg add HKLM\SYSTEM\Setup\LabConfig /v BypassCPUCheck /t reg_dword /d 1 /f</Path>
       </RunSynchronousCommand>
-      <RunSynchronousCommand wcm:action="add"><Order>9</Order>
+      <RunSynchronousCommand wcm:action="add"><Order>10</Order>
         <Path>reg add HKLM\SYSTEM\Setup\LabConfig /v BypassStorageCheck /t reg_dword /d 1 /f</Path>
       </RunSynchronousCommand>
       <!-- MoSetup bypass for upgrade scenarios with unsupported TPM or CPU -->
-      <RunSynchronousCommand wcm:action="add"><Order>10</Order>
+      <RunSynchronousCommand wcm:action="add"><Order>11</Order>
         <Path>reg add HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Setup\MoSetup /v AllowUpgradesWithUnsupportedTPMorCPU /t reg_dword /d 1 /f</Path>
       </RunSynchronousCommand>
     </RunSynchronous>
@@ -955,14 +967,20 @@ function FETCH_25H2_CAB {
       if ($parts.Length -ge 2 -and $parts[1].Length -ge 2) { $country = $parts[1].Substring(0,2).ToUpperInvariant() }
       else { $country = ([System.Globalization.RegionInfo] $lc).TwoLetterISORegionName }
     } catch { $country = ([System.Globalization.RegionInfo] (Get-Culture).Name).TwoLetterISORegionName }
-    # OSVersion/LcuVersion/MediaVersion set to known-good values for 26100 target
+    # OSVersion baseline stays fixed known-good for 26100 target; LcuVersion/MediaVersion
+    # derive from the target release CB (build.ubr of the media being requested), else the
+    # host registry build/ubr, else the literal fallback
     
     $targetVersion = "26100.0.0.0"
     $branch = "br_release"
     $previewBuilds = 1
     $attrDataVer = 338
-    $lcuVersion = "10.0.28000.1340"
-    $mediaVersion = "10.0.28000.1340"
+    if ("$env:CB" -match '^(\d+)\.(\d+)\.') { $lcuVersion = "10.0.$($matches[1]).$($matches[2])" }
+    elseif ("$build" -match '^\d+$' -and "$ubr" -match '^\d+$') { $lcuVersion = "10.0.$build.$ubr" } else { $lcuVersion = "10.0.28000.1340" }
+    $mediaVersion = $lcuVersion
+    $ed = "$env:EDITION".Trim()
+    $compEdition = if ($ed) { $ed } else { "Enterprise" }
+    $editionIdOut = if ($ed) { $ed } elseif ("$editionId".Trim()) { "$editionId".Trim() } else { "Professional" }
     
     $deviceAttrs = @(
       "MediaBranch=$branch"
@@ -972,7 +990,7 @@ function FETCH_25H2_CAB {
       "MediaVersion=$mediaVersion"
       "AppVer=10.0"
       "PreviewBuilds=$previewBuilds"
-      "CompositionEditionId=Enterprise"
+      "CompositionEditionId=$compEdition"
       "CurrentBranch=$branch"
       "OSArchitecture=$arch"
       "InstallationType=Client"
@@ -985,7 +1003,7 @@ function FETCH_25H2_CAB {
       "IsoCountryShortCode=$country"
       "OSVersion=10.0.26100.1"
       "AttrDataVer=$attrDataVer"
-      "EditionId=Professional"
+      "EditionId=$editionIdOut"
       "DUScan=1"
     ) -join ';'
     
@@ -1061,7 +1079,7 @@ set ^ #=& set "0=%~f0"& set 1=;DOWNLOAD %*& powershell -nop -c "%#%"& exit /b %e
 function DOWNLOAD ($u, $f, $p = (get-location).Path) {
   $null = Import-Module BitsTransfer -ea 0; $wc = new-object Net.WebClient; $wc.Headers.Add('user-agent','ipad')
   $file = join-path $p $f; $s = 'https://'; $i = 'http://'; $d = $u.replace($s,'').replace($i,''); $https = $s+$d; $http = $i+$d
-  foreach ($url in $http, $https) {
+  foreach ($url in $https, $http) {
     if (([IO.FileInfo]$file).Exists) {return}; try {Start-BitsTransfer $url $file -ea 1} catch {}
     if (([IO.FileInfo]$file).Exists) {return}; try {Invoke-WebRequest $url -OutFile $file} catch {} ; $j = (Get-Date).Ticks
     if (([IO.FileInfo]$file).Exists) {return}; try {$null = bitsadmin /transfer $j /priority foreground $url $file} catch {}

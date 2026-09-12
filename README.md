@@ -147,4 +147,15 @@ _We did it! We broke [the previous gist](https://git.io/MediaCreationTool.bat)_ 
 2022.03.18: fix regression with Auto Upgrade; removed powershell -nop arg (issue #41); enhanced 11 AutoUnattend.xml
 2022.03.20: stable - all issues ironed out; improved script ui; upgrade keeping files from Eval editions too
             last squash I promise ;)
+2026.01.15: stable
+            TPM Bypass Enhancements: HwReqChk, LabConfig (TPM/SecureBoot/RAM/CPU/Storage checks), MoSetup AllowUpgradesWithUnsupportedTPMorCPU
+            25H2 dynamic CAB fetch from FE3 (respects LANGCODE for country detection)
+            all issues ironed out; upgrade keeping files from Eval editions too; pickup $ISO$ dir content to add on media
+            DU in 11: auto installs 22000.556 atm; older skip_11_checks, without Server label; Home offline local account
+2026.09.12: HTTPS-first downloads - HTTP fallback no longer tried before HTTPS
+            Authenticode signature check of the downloaded MediaCreationTool exe before it is run
+            25H2 CAB fetch now uses live registry build/UBR/edition instead of hardcoded literals
+            ProductVersion policy added alongside TargetReleaseVersion for the update-nag bypass
+            .Admin runas registry association is now cleaned up after use in bypass11 scripts
+            added tests/static-check.sh static test script (CRLF, XML, labels, PowerShell brace balance)
 ```

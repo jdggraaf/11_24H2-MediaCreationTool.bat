@@ -34,6 +34,9 @@
       <RunSynchronousCommand wcm:action="add"><Order>3</Order>
         <Path>reg add HKLM\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate /v TargetReleaseVersionInfo /d 25H1 /f</Path>
       </RunSynchronousCommand>
+      <RunSynchronousCommand wcm:action="add"><Order>4</Order>
+        <Path>reg add HKLM\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate /v ProductVersion /d "Windows 11" /t reg_sz /f</Path>
+      </RunSynchronousCommand>
     </RunSynchronous>
   </component></settings>
   <settings pass="oobeSystem"><component name="Microsoft-Windows-Shell-Setup" processorArchitecture="amd64" language="neutral" 
