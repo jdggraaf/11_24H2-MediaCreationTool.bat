@@ -51,5 +51,20 @@ say "ok   powershell brace balance"
 # 7. The HTTPS-first rule: DOWNLOAD must try $https before $http.
 grep -q 'foreach ($url in $https, $http)' MediaCreationTool.bat && say "ok   DOWNLOAD tries https first" || bad "DOWNLOAD does not try https first"
 
+# 8. Parse every #:NAME:# PowerShell snippet exactly as the script's bootstrap extracts it (needs pwsh; skipped otherwise).
+PWSH=${PWSH:-$(command -v pwsh || true)}
+if [ -n "$PWSH" ]; then
+  for n in $(grep -oE '#:[A-Z0-9_]+:#' MediaCreationTool.bat | sort -u); do
+    name=${n#\#:}; name=${name%:\#}
+    "$PWSH" -NoProfile -c "
+      \$f0=[io.file]::ReadAllText('MediaCreationTool.bat'); \$0=(\$f0 -split '#\:${name}\:',3)[1]
+      \$e=\$null; \$null=[System.Management.Automation.Language.Parser]::ParseInput(\$0,[ref]\$null,[ref]\$e)
+      if (\$e) { \$e | % { \"  \$(\$_.Extent.StartLineNumber): \$(\$_.Message)\" }; exit 1 }" \
+      && say "ok   pwsh parse $n" || bad "PowerShell parse error in snippet $n"
+  done
+else
+  say "skip pwsh parse (pwsh not found; set PWSH=/path/to/pwsh)"
+fi
+
 [ $fail -eq 0 ] && say "ALL CHECKS PASSED" || say "SOME CHECKS FAILED"
 exit $fail

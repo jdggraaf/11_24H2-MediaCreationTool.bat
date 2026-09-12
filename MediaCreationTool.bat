@@ -5,6 +5,9 @@
 :: 25H2 CAB dynamically fetched from Microsoft Update Metadata Service with LANGCODE support
 :: TPM Bypass Enhancements with HwReqChk, LabConfig, and MoSetup registry configurations
 :: Changelog: 2026.09.12 stable
+:: - redesigned setup: one window for version, action and media options (edition, language, arch, key, dynamic update, extras)
+:: - MediaCreationTool.ini remembers your choices; "help" prints usage; "legacy" brings back the classic two-step dialogs
+:: - fixed: Windows 11 choices asked again after self-elevation (index cap left over from 21H2); MoSetup key path in unattend
 :: - DOWNLOAD now tries HTTPS before HTTP (closes MITM downgrade window before MCT exe runs)
 :: - MediaCreationTool exe is Authenticode-verified (Valid, Microsoft Corporation signer) before it is started
 :: - FETCH_25H2_CAB derives LcuVersion/MediaVersion from the target release build/ubr (CB), and EditionId/CompositionEditionId from %EDITION%/registry instead of unrelated hardcoded literals
@@ -43,6 +46,9 @@ rem set /a NO_UPDATE=1
 ::# uncomment to not add EI.cfg PID.txt auto.cmd $ISO$ dir content - or rename script:  "def MediaCreationTool.bat"
 ::# this will create a default, untouched MCT media 
 rem set /a DEF=1
+
+::# MediaCreationTool.ini next to the script sets any of the above (KEY=VALUE per line) - written by the dialog "Remember" option
+if exist "%~dp0MediaCreationTool.ini" for /f "usebackq eol=; tokens=1,* delims==" %%O in ("%~dp0MediaCreationTool.ini") do if not defined %%O set "%%O=%%P"
 
 ::# comment to not use recommended windows setup options that give the least amount of issues when doing upgrades
 set OPTIONS=%OPTIONS% /Compat IgnoreWarning /MigrateDrivers All /ResizeRecoveryPartition Disable /ShowOOBE None
@@ -115,6 +121,10 @@ for %%s in (%~n0 %*) do if /i %%s equ def set "DEF=def"
 ::# parse HIDE from script name or commandline - hide script window while awaiting MCT processing (new default is to minimize)
 set /a hide=2 & for %%s in (%~n0 %*) do if /i %%s equ hide set /a hide=1
 
+::# parse HELP / LEGACY from script name or commandline - print usage / use the classic two-step choice dialogs
+for %%s in (%~n0 %*) do for %%h in (help -help --help) do if /i "%%~s" equ "%%h" goto help
+for %%s in (%~n0 %*) do if /i %%s equ legacy set "LEGACY=1"
+
 ::# auto detected / selected media preset
 if defined EDITION (set MEDIA_EDITION=%EDITION%) else (set MEDIA_EDITION=%OS_EDITION%)
 if defined LANGCODE (set MEDIA_LANGCODE=%LANGCODE%) else (set MEDIA_LANGCODE=%OS_LANGCODE%)
@@ -129,7 +139,7 @@ if not defined VID (set VID=%OS_VID%)
 (set MEDIA_EDITION=%MEDIA_EDITION:IoTEnterpriseS=Enterprise%)
 
 ::# get previous GUI selection if self elevated and skip to choice
-for %%s in (%*) do for %%P in (1 2 3 4) do if %%~ns gtr 0 if %%~ns lss 15 if %%~xs. equ .%%P. set /a PRE=%%P & set /a MCT=%%~ns
+for %%s in (%*) do for %%P in (1 2 3 4) do if %%~ns gtr 0 if %%~ns lss 100 if %%~xs. equ .%%P. set /a PRE=%%P & set /a MCT=%%~ns
 
 ::# write auto media preset hint
 %<%:f0 " Detected Media "%>>% & if defined MCT %<%:5f " %VID% "%>>%
@@ -144,7 +154,21 @@ echo;
 %<%:17 "1-4 adds to media: PID.txt, EI.cfg, $ISO$ dir, auto.cmd for upgrade and tpm checks "%>%
 %<%:17 "can rename script: "%>>% & %<%:1f "def MediaCreationTool.bat"%>>% & %<%:17 " to always create unmodified MCT media "%>%
 
-::# show more responsive MCT + PRE pseudo-menu dialog or separate choice dialog instances if either MCT or PRE are set
+::# single-window setup dialog: version, action and media options - preselects what the script name / commandline / ini gave
+set GUI=& if not defined LEGACY if not defined MCT set GUI=1
+if not defined LEGACY if not defined PRE set GUI=1
+if defined GUI if defined MCT set /a dV=%MCT%
+if defined GUI if defined PRE set /a dP=%PRE%
+if defined GUI call :SETUP_GUI
+if defined GUI_EDITION if "%GUI_EDITION%" neq "-" set "EDITION=%GUI_EDITION%" & set "MEDIA_EDITION=%GUI_EDITION%"
+if defined GUI_LANGCODE if "%GUI_LANGCODE%" neq "-" set "LANGCODE=%GUI_LANGCODE%" & set "MEDIA_LANGCODE=%GUI_LANGCODE%"
+if defined GUI_ARCH if "%GUI_ARCH%" neq "-" set "ARCH=%GUI_ARCH%" & set "MEDIA_ARCH=%GUI_ARCH%"
+if defined GUI_KEY if "%GUI_KEY%" neq "-" set "KEY=%GUI_KEY%" & set "PKEY=%GUI_KEY%"
+if defined GUI_NO_UPDATE if "%GUI_NO_UPDATE%" neq "-" set "NO_UPDATE=1" & set "OPTIONS=%OPTIONS:/DynamicUpdate Enable=/DynamicUpdate Disable%"
+if defined GUI_DEF if "%GUI_DEF%" neq "-" set "DEF=def"
+if defined GUI_SAVE if "%GUI_SAVE%" neq "-" call :save_ini
+
+::# classic two-step dialogs (legacy keyword) - also the fallback if the single-window dialog could not run
 if "%MCT%%PRE%"=="" call :choices2 MCT "%VERSIONS%" %dV% "MCT Version" PRE "%PRESETS%" %dP% "MCT Preset" 11 white 0x005a9e 320
 if %MCT%0 lss 1 if %PRE%0 gtr 1 call :choices MCT "%VERSIONS%" %dV% "MCT Version" 11 white 0x005a9e 320
 if %MCT%0 gtr 1 if %PRE%0 lss 1 call :choices PRE "%PRESETS%"  %dP% "MCT Preset"  11 white 0x005a9e 320
@@ -284,6 +308,46 @@ set /a MCT=%dv% & set /a PRE=%dP% & goto choice-%dV%
 :choice-0
 %<%:0c " CANCELED "%>% & timeout /t 3 >nul & exit /b
 
+:help
+echo;
+echo; MediaCreationTool.bat  -  Universal MCT wrapper for Windows 10 1507 through Windows 11 25H2
+echo;
+echo; Run it to get the setup window: pick the Windows version, what to do, and the media options. Start.
+echo; Every choice can also be given by renaming the script or on the commandline, in any order, for example:
+echo;   "auto 11_25H2 MediaCreationTool.bat"          upgrade this PC to 11 25H2 without prompts
+echo;   "iso 22H2 de-DE Enterprise MediaCreationTool.bat"   build a German Enterprise 22H2 ISO here
+echo;   MediaCreationTool.bat 11_24H2 usb x64 Professional no_update
+echo;
+echo;   version    1507 1511 1607 1703 1709 1803 1809 1903 1909 20H1 20H2 21H1 21H2 22H2 11_21H2 11_22H2 11_23H2 11_24H2 11_25H2
+echo;   action     auto (upgrade)  iso  usb   - nothing given = the setup window asks
+echo;   edition    Home HomeN Pro ProN Edu EduN Enterprise EnterpriseN ProfessionalWorkstation ... (see setup window)
+echo;   language   any xx-YY code such as en-US de-DE fr-FR
+echo;   arch       x64 x86 (x86 only for Windows 10)
+echo;   key        AAAAA-BBBBB-CCCCC-DDDDD-EEEEE (optional, generic key of the edition is used otherwise)
+echo;   no_update  do not let setup download the latest fixes (dynamic update)
+echo;   def        plain MCT media without the script extras (tpm bypass, auto.cmd, EI.cfg, PID.txt, $ISO$ content)
+echo;   hide       hide the console while MCT works     legacy   classic two-step dialogs     help   this text
+echo;
+echo; MediaCreationTool.ini next to the script keeps defaults (KEY=VALUE per line, same names as above: MCT AUTO ISO EDITION
+echo; LANGCODE ARCH KEY NO_UPDATE DEF) - the setup window writes it for you when "Remember these choices" is ticked.
+echo;
+pause & exit /b
+
+:save_ini
+::# write MediaCreationTool.ini from the dialog choices next to the original script and in the work folder
+for %%d in ("%ROOT%" "%WORK%") do if exist "%%~d\" (
+ echo;; MediaCreationTool.ini - defaults for MediaCreationTool.bat, written by the setup window "Remember these choices"
+ echo;; delete this file or untick the option to get auto detection back - run the script with "help" for all names
+ if defined VID echo;MCT=%VID%
+ if defined EDITION echo;EDITION=%EDITION%
+ if defined LANGCODE echo;LANGCODE=%LANGCODE%
+ if defined ARCH echo;ARCH=%ARCH%
+ if defined KEY echo;KEY=%KEY%
+ if defined NO_UPDATE echo;NO_UPDATE=1
+ if defined DEF echo;DEF=1
+) >"%%~d\MediaCreationTool.ini"
+exit /b
+
 :latest unified console appearance under 7 - 11
 @echo off& title MCT& set __COMPAT_LAYER=Installer& chcp 437 >nul& set set=& for %%s in (%*) do if /i %%s equ set (set set=1)
 if not defined set set /a BackClr=0x1 & set /a TextClr=0xf & set /a Columns=32 & set /a Lines=120 & set /a Buff=9999
@@ -306,7 +370,7 @@ if not defined set for %%s in ("HKCU\Console\MCT") do (
 pushd "%~dp0" & set "S=%SystemRoot%" & set "nx0=%~nx0" & call set "nx0=%%nx0:)=]%%" & call set "nx0=%%nx0:(=[%%"
 set "PATH=%S%\Sysnative;%S%\Sysnative\windowspowershell\v1.0\;%S%\System32;%S%\System32\windowspowershell\v1.0\;%PATH%"
 set "WORK=%SystemDrive%\ESD" & if not defined ROOT (set "ROOT=%CD%") else if not exist "%ROOT%\*.bat" set "ROOT=%CD%"
-mkdir "%WORK%" >nul 2>nul & attrib -R -S -H "%WORK%" >nul 2>nul & robocopy "%~dp0/" "%WORK%/" "%~nx0" >nul
+mkdir "%WORK%" >nul 2>nul & attrib -R -S -H "%WORK%" >nul 2>nul & robocopy "%~dp0/" "%WORK%/" "%~nx0" MediaCreationTool.ini >nul
 if "%~nx0" neq "%nx0%" copy /y "%WORK%\%~nx0" "%WORK%\%nx0%" >nul & del /f /q "%WORK%\%~nx0" >nul
 if not defined set start "MCT" cmd /d /x /c set "ROOT=%ROOT%" ^& call "%WORK%\%nx0%" %* set& exit /b
 ::# self-echo top 1-20 lines of script
@@ -326,7 +390,8 @@ if %PRE% equ 2 (set "PRESET=Auto ISO")
 if %PRE% equ 3 (set "PRESET=Auto USB")
 if %PRE% equ 4 (set "PRESET=Select"       & set EDITION=& set LANGCODE=& set ARCH=& set KEY=)
 if %PRE% equ 5 (set "PRESET=MCT Defaults" & set EDITION=& set LANGCODE=& set ARCH=& set KEY=)
-if %PRE% equ 5 (goto noelevate) else set set=%MCT%.%PRE%
+set "GUI_TOKENS=" & for %%s in (%GUI_EDITION% %GUI_LANGCODE% %GUI_ARCH% %GUI_KEY% %GUI_NO_UPDATE% %GUI_DEF%) do if "%%s" neq "-" call set "GUI_TOKENS=%%GUI_TOKENS%% %%s"
+if %PRE% equ 5 (goto noelevate) else set set=%MCT%.%PRE%%GUI_TOKENS%
 
 ::# self elevate if needed for the custom presets to monitor setup progress, passing arguments and last GUI choices
 fltmc>nul||(set A=/d /x /c set "ROOT=%ROOT%"^& start "MCT" "%~f0" %* %set%& powershell -nop -c start -verb runas cmd $env:A;&exit)
@@ -893,7 +958,7 @@ function WIM_INFO ($file = 'install.esd', $index = 0, $out = 0) { :info while ($
       </RunSynchronousCommand>
       <!-- MoSetup bypass for upgrade scenarios with unsupported TPM or CPU -->
       <RunSynchronousCommand wcm:action="add"><Order>11</Order>
-        <Path>reg add HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Setup\MoSetup /v AllowUpgradesWithUnsupportedTPMorCPU /t reg_dword /d 1 /f</Path>
+        <Path>reg add HKLM\SYSTEM\Setup\MoSetup /v AllowUpgradesWithUnsupportedTPMorCPU /t reg_dword /d 1 /f</Path>
       </RunSynchronousCommand>
     </RunSynchronous>
   </component></settings>
@@ -1113,6 +1178,84 @@ function CHOICES2 {iex($f0-split '#\:CHOICES\:' ,3)[1]; function :LOOP { $a=$arg
  $c2 = @($a[4], $a[5], $a[6], $a_7_,  $a[-4], $a[-3], $a[-2], $a[-1]); $r2= CHOICES @c2; if ($r2 -ge 1) {return "$r1 $r2"}
  if ($r2 -lt 1) {$a[2]=$r1; :LOOP @a} }; :LOOP @args #:: index1 choices1 def1 title1  index2 choices2 def2 title2  font bc tc win
 } #:CHOICES2:#  MediaCreationTool.bat gui pseudo-menu via CHOICES snippet, streamlined in a single powershell instance
+
+::--------------------------------------------------------------------------------------------------------------------------------
+#:SETUP_GUI:#  [INTERNAL]  version + action + media options in one window; "-" means auto / not set
+set ^ #=;$f0=[io.file]::ReadAllText($env:0); $0=($f0-split '#\:SETUP_GUI\:' ,3)[1]; $1=$env:1-replace'([`@$])','`$1'; iex($0+$1)
+set ^ #=&set "0=%~f0"&set 1=;SETUP_GUI&(for /f "tokens=1-9" %%a in ('powershell -nop -c "%#%"')do set MCT=%%a&set PRE=%%b&set GUI_EDITION=%%c&set GUI_LANGCODE=%%d&set GUI_ARCH=%%e&set GUI_KEY=%%f&set GUI_NO_UPDATE=%%g&set GUI_DEF=%%h&set GUI_SAVE=%%i)&exit /b
+function SETUP_GUI {
+ [void][Reflection.Assembly]::LoadWithPartialName('System.Windows.Forms'); [void][Reflection.Assembly]::LoadWithPartialName('System.Drawing')
+ [Windows.Forms.Application]::EnableVisualStyles()
+ $vids = "$env:VERSIONS".Split(','); $dV = [int]"$env:dV"; $dP = [int]"$env:dP"
+ $presets = ("$env:PRESETS" -replace '&','').Split(',')
+ $descs = @('MCT downloads the detected media, then the script runs the in-place upgrade without prompts',
+            'MCT downloads the detected media, then the script builds an ISO in the script folder / C:\ESD',
+            'MCT downloads the detected media, then the script writes it to the USB stick you pick',
+            'MCT asks you for Edition, Language, Architecture and target - the script adds its extras',
+            'Plain MCT run - no script assistance, no extras added to the media')
+ $editions = 'Core','CoreN','CoreSingleLanguage','CoreCountrySpecific','Professional','ProfessionalN','ProfessionalEducation',
+  'ProfessionalEducationN','ProfessionalWorkstation','ProfessionalWorkstationN','Education','EducationN','Enterprise','EnterpriseN','Cloud','CloudN'
+ $langs = 'ar-SA','bg-BG','cs-CZ','da-DK','de-DE','el-GR','en-GB','en-US','es-ES','es-MX','et-EE','fi-FI','fr-CA','fr-FR','he-IL','hr-HR',
+  'hu-HU','it-IT','ja-JP','ko-KR','lt-LT','lv-LV','nb-NO','nl-NL','pl-PL','pt-BR','pt-PT','ro-RO','ru-RU','sk-SK','sl-SI','sr-Latn-RS',
+  'sv-SE','th-TH','tr-TR','uk-UA','zh-CN','zh-TW'
+ $f = New-Object Windows.Forms.Form; $f.Text = 'Universal MediaCreationTool'; $f.StartPosition = 'CenterScreen'
+ $f.FormBorderStyle = 'FixedDialog'; $f.MaximizeBox = $false; $f.MinimizeBox = $false; $f.ClientSize = '760,470'
+ $f.Font = New-Object Drawing.Font('Segoe UI', 9.5)
+ $mono = New-Object Drawing.Font('Consolas', 10)
+ function Ctl ($type, $props) { $c = New-Object ("Windows.Forms.$type"); foreach ($k in $props.Keys) { $c.$k = $props[$k] }; $f.Controls.Add($c); $c }
+
+ # ---- left: version list --------------------------------------------------------------------------
+ [void](Ctl Label @{Text='1. Windows version'; Location='16,12'; AutoSize=$true; Font=(New-Object Drawing.Font('Segoe UI', 10, [Drawing.FontStyle]::Bold))})
+ $lb = Ctl ListBox @{Location='16,36'; Size='230,350'; Font=$mono; IntegralHeight=$false}
+ for ($i = $vids.Count - 1; $i -ge 0; $i--) {
+  $v = $vids[$i]; $lbl = if ($v -like '11_*') { 'Windows 11 ' + $v.Substring(3) } else { 'Windows 10 ' + $v }
+  if ($i -eq ($dV - 1)) { $lbl += '   (latest)' }; [void]$lb.Items.Add($lbl)
+ }
+ $lb.SelectedIndex = $vids.Count - $dV
+ [void](Ctl Label @{Text='Newest first. Upgrades always get the latest build of the chosen version. Windows 10 support ended 14 Oct 2025 (ESU until 13 Oct 2026).'; Location='16,392'; Size='230,72'; ForeColor='DimGray'})
+
+ # ---- right top: action ----------------------------------------------------------------------------
+ [void](Ctl Label @{Text='2. What to do'; Location='270,12'; AutoSize=$true; Font=(New-Object Drawing.Font('Segoe UI', 10, [Drawing.FontStyle]::Bold))})
+ $rbs = @(); $y = 36
+ for ($i = 0; $i -lt $presets.Count; $i++) {
+  $rb = Ctl RadioButton @{Text=$presets[$i]; Location="270,$y"; AutoSize=$true; Checked=($i -eq ($dP - 1))}
+  [void](Ctl Label @{Text=$descs[$i]; Location="292,$($y + 20)"; Size='450,18'; ForeColor='DimGray'})
+  $rbs += $rb; $y += 42
+ }
+
+ # ---- right bottom: options ------------------------------------------------------------------------
+ $oy = 252
+ [void](Ctl Label @{Text='3. Media options   (Auto = same as this PC)'; Location="270,$oy"; AutoSize=$true; Font=(New-Object Drawing.Font('Segoe UI', 10, [Drawing.FontStyle]::Bold))})
+ function Pick ($label, $x, $y, $w, $items, $auto, $cur, $editable) {
+  [void](Ctl Label @{Text=$label; Location="$x,$y"; AutoSize=$true})
+  $cb = Ctl ComboBox @{Location="$x,$($y + 20)"; Width=$w; DropDownStyle=$(if ($editable) {'DropDown'} else {'DropDownList'})}
+  [void]$cb.Items.Add("Auto ($auto)"); foreach ($it in $items) { [void]$cb.Items.Add($it) }
+  $cb.SelectedIndex = 0; if ($cur) { $ix = $cb.Items.IndexOf($cur); if ($ix -ge 0) { $cb.SelectedIndex = $ix } elseif ($editable) { $cb.Text = $cur } }
+  $cb
+ }
+ $cbE = Pick 'Edition' 270 ($oy + 26) 200 $editions "$env:OS_EDITION" "$env:EDITION" $false
+ $cbL = Pick 'Language' 484 ($oy + 26) 120 $langs "$env:OS_LANGCODE" "$env:LANGCODE" $true
+ $cbA = Pick 'Architecture' 618 ($oy + 26) 120 @('x64','x86') "$env:OS_ARCH" "$env:ARCH" $false
+ [void](Ctl Label @{Text='Product key (optional - generic key of the edition is used when empty)'; Location="270,$($oy + 74)"; AutoSize=$true})
+ $tbK = Ctl TextBox @{Location="270,$($oy + 94)"; Width=468; Font=$mono; CharacterCasing='Upper'; MaxLength=29; Text="$env:KEY"}
+ $ckU = Ctl CheckBox @{Text='Dynamic update: let setup download the latest fixes (recommended)'; Location="270,$($oy + 124)"; AutoSize=$true; Checked=("$env:NO_UPDATE" -eq '')}
+ $ckX = Ctl CheckBox @{Text='Script extras: TPM/CPU check bypass, auto.cmd, EI.cfg, PID.txt, $ISO$ folder content'; Location="270,$($oy + 146)"; AutoSize=$true; Checked=("$env:DEF" -eq '')}
+ $ckS = Ctl CheckBox @{Text='Remember these choices as defaults (MediaCreationTool.ini next to the script)'; Location="270,$($oy + 168)"; AutoSize=$true; Checked=$false}
+
+ # ---- buttons --------------------------------------------------------------------------------------
+ $ok = Ctl Button @{Text='Start'; Location='558,432'; Size='90,28'}; $ok.DialogResult = 'OK'
+ $no = Ctl Button @{Text='Cancel'; Location='654,432'; Size='84,28'}; $no.DialogResult = 'Cancel'
+ $f.AcceptButton = $ok; $f.CancelButton = $no
+ $f.Add_Shown({ $f.Activate(); $lb.Focus() })
+ $tbK.Add_TextChanged({ $ok.Enabled = ($tbK.Text.Length -eq 0 -or $tbK.Text -match '^[A-Z0-9]{5}(-[A-Z0-9]{5}){4}$') })
+
+ if ($f.ShowDialog() -ne 'OK') { return '0 0 - - - - - - -' }
+ $mct = $vids.Count - $lb.SelectedIndex; $pre = 1; for ($i = 0; $i -lt $rbs.Count; $i++) { if ($rbs[$i].Checked) { $pre = $i + 1 } }
+ function Val ($cb) { $t = "$($cb.Text)".Trim(); if ($cb.SelectedIndex -eq 0 -or $t -like 'Auto*' -or $t -eq '') { '-' } else { $t } }
+ $key = "$($tbK.Text)".Trim(); if ($key -eq '') { $key = '-' }
+ $noupd = if ($ckU.Checked) { '-' } else { 'no_update' }; $def = if ($ckX.Checked) { '-' } else { 'def' }; $save = if ($ckS.Checked) { 'save' } else { '-' }
+ "$mct $pre $(Val $cbE) $(Val $cbL) $(Val $cbA) $key $noupd $def $save"
+} #:SETUP_GUI:#  single-window setup dialog returning: mct pre edition langcode arch key no_update def save
 
 ::--------------------------------------------------------------------------------------------------------------------------------
 #:PRODUCTS_XML:#  [INTERNAL]    refactored with less looping over Files; addressed more powershell 2.0 quirks

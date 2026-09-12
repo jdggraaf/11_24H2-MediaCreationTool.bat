@@ -28,6 +28,11 @@ bash tests/static-check.sh
 
 It must print `ALL CHECKS PASSED` before you're done.
 
+If PowerShell 7 (`pwsh`) is installed or you point `PWSH=/path/to/pwsh` at one, the
+script also parses every `#:NAME:#` PowerShell snippet exactly as the batch bootstrap
+extracts it, so syntax errors in the embedded PowerShell are caught on Linux/macOS too.
+Behaviour (WinForms dialogs, MCT, setup) can only be tested on Windows.
+
 ## `:choice-N` / `VERSIONS` mapping
 
 `MediaCreationTool.bat` picks the OS version/edition to fetch through a small,

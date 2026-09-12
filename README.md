@@ -11,6 +11,18 @@ A powerful yet simple windows 10 / 11 deployment automation tool as well!
 - `AllowUpgradesWithUnsupportedTPMorCPU` for MoSetup upgrade scenarios
 - Maintains existing appraiserres.dll and winsetup.dll bypass mechanisms
 
+Setup window  
+------------  
+Run the script and one window asks for everything:  
+> _**1. Windows version** - newest first, 11 25H2 preselected. Windows 10 support ended 14 Oct 2025 (ESU until 13 Oct 2026)_  
+> _**2. What to do** - Auto Upgrade / Auto ISO / Auto USB / Select / MCT Defaults, each with a one-line explanation_  
+> _**3. Media options** - Edition, Language, Architecture (Auto = same as this PC), product key, dynamic update, script extras_  
+> _**Remember these choices** writes `MediaCreationTool.ini` next to the script; delete it or untick to get auto detection back_  
+
+Everything the window asks can still be given by renaming the script or on the commandline, in any order -  
+run `MediaCreationTool.bat help` for the full list. `legacy` brings back the classic two-step dialogs.  
+The window needs Windows PowerShell with WinForms (any Windows 7+ install); if it cannot start, the classic dialogs appear.  
+
 Presets  
 -------  
 1 ***Auto Upgrade*** with detected media, script assists setupprep for upgrading directly  
@@ -152,6 +164,7 @@ _We did it! We broke [the previous gist](https://git.io/MediaCreationTool.bat)_ 
             25H2 dynamic CAB fetch from FE3 (respects LANGCODE for country detection)
             all issues ironed out; upgrade keeping files from Eval editions too; pickup $ISO$ dir content to add on media
             DU in 11: auto installs 22000.556 atm; older skip_11_checks, without Server label; Home offline local account
+2026.09.12: redesigned setup window (version + action + media options in one), MediaCreationTool.ini, help, legacy; fixed 11 choices asking again after elevation and the MoSetup key path in unattend
 2026.09.12: HTTPS-first downloads - HTTP fallback no longer tried before HTTPS
             Authenticode signature check of the downloaded MediaCreationTool exe before it is run
             25H2 CAB fetch now uses live registry build/UBR/edition instead of hardcoded literals
