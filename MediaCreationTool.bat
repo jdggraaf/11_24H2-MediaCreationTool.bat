@@ -1199,7 +1199,7 @@ function SETUP_GUI {
   'hu-HU','it-IT','ja-JP','ko-KR','lt-LT','lv-LV','nb-NO','nl-NL','pl-PL','pt-BR','pt-PT','ro-RO','ru-RU','sk-SK','sl-SI','sr-Latn-RS',
   'sv-SE','th-TH','tr-TR','uk-UA','zh-CN','zh-TW'
  $f = New-Object Windows.Forms.Form; $f.Text = 'Universal MediaCreationTool'; $f.StartPosition = 'CenterScreen'
- $f.FormBorderStyle = 'FixedDialog'; $f.MaximizeBox = $false; $f.MinimizeBox = $false; $f.ClientSize = '760,470'
+ $f.FormBorderStyle = 'FixedDialog'; $f.MaximizeBox = $false; $f.MinimizeBox = $false; $f.ClientSize = '760,500'
  $f.Font = New-Object Drawing.Font('Segoe UI', 9.5)
  $mono = New-Object Drawing.Font('Consolas', 10)
  function Ctl ($type, $props) { $c = New-Object ("Windows.Forms.$type"); foreach ($k in $props.Keys) { $c.$k = $props[$k] }; $f.Controls.Add($c); $c }
@@ -1212,14 +1212,14 @@ function SETUP_GUI {
   if ($i -eq ($dV - 1)) { $lbl += '   (latest)' }; [void]$lb.Items.Add($lbl)
  }
  $lb.SelectedIndex = $vids.Count - $dV
- [void](Ctl Label @{Text='Newest first. Upgrades always get the latest build of the chosen version. Windows 10 support ended 14 Oct 2025 (ESU until 13 Oct 2026).'; Location='16,392'; Size='230,72'; ForeColor='DimGray'})
+ [void](Ctl Label @{Text='Newest first. Upgrades always get the latest build of the chosen version. Windows 10 support ended 14 Oct 2025 (ESU until 13 Oct 2026).'; Location='16,392'; Size='230,100'; ForeColor='DimGray'})
 
  # ---- right top: action ----------------------------------------------------------------------------
  [void](Ctl Label @{Text='2. What to do'; Location='270,12'; AutoSize=$true; Font=(New-Object Drawing.Font('Segoe UI', 10, [Drawing.FontStyle]::Bold))})
  $rbs = @(); $y = 36
  for ($i = 0; $i -lt $presets.Count; $i++) {
   $rb = Ctl RadioButton @{Text=$presets[$i]; Location="270,$y"; AutoSize=$true; Checked=($i -eq ($dP - 1))}
-  [void](Ctl Label @{Text=$descs[$i]; Location="292,$($y + 20)"; Size='450,18'; ForeColor='DimGray'})
+  [void](Ctl Label @{Text=$(if ($i -lt $descs.Count) {$descs[$i]} else {''}); Location="292,$($y + 20)"; Size='450,18'; ForeColor='DimGray'})
   $rbs += $rb; $y += 42
  }
 
@@ -1238,16 +1238,18 @@ function SETUP_GUI {
  $cbA = Pick 'Architecture' 618 ($oy + 26) 120 @('x64','x86') "$env:OS_ARCH" "$env:ARCH" $false
  [void](Ctl Label @{Text='Product key (optional - generic key of the edition is used when empty)'; Location="270,$($oy + 74)"; AutoSize=$true})
  $tbK = Ctl TextBox @{Location="270,$($oy + 94)"; Width=468; Font=$mono; CharacterCasing='Upper'; MaxLength=29; Text="$env:KEY"}
- $ckU = Ctl CheckBox @{Text='Dynamic update: let setup download the latest fixes (recommended)'; Location="270,$($oy + 124)"; AutoSize=$true; Checked=("$env:NO_UPDATE" -eq '')}
- $ckX = Ctl CheckBox @{Text='Script extras: TPM/CPU check bypass, auto.cmd, EI.cfg, PID.txt, $ISO$ folder content'; Location="270,$($oy + 146)"; AutoSize=$true; Checked=("$env:DEF" -eq '')}
- $ckS = Ctl CheckBox @{Text='Remember these choices as defaults (MediaCreationTool.ini next to the script)'; Location="270,$($oy + 168)"; AutoSize=$true; Checked=$false}
+ $ckU = Ctl CheckBox @{Text='Dynamic update - let setup download the latest fixes (recommended)'; Location="270,$($oy + 124)"; AutoSize=$true; Checked=("$env:NO_UPDATE" -eq '')}
+ $ckX = Ctl CheckBox @{Text='Script extras - TPM/CPU bypass, auto.cmd, EI.cfg, PID.txt, $ISO$ content'; Location="270,$($oy + 146)"; AutoSize=$true; Checked=("$env:DEF" -eq '')}
+ $ckS = Ctl CheckBox @{Text='Remember these choices (writes MediaCreationTool.ini next to the script)'; Location="270,$($oy + 168)"; AutoSize=$true; Checked=$false}
 
  # ---- buttons --------------------------------------------------------------------------------------
- $ok = Ctl Button @{Text='Start'; Location='558,432'; Size='90,28'}; $ok.DialogResult = 'OK'
- $no = Ctl Button @{Text='Cancel'; Location='654,432'; Size='84,28'}; $no.DialogResult = 'Cancel'
+ $ok = Ctl Button @{Text='Start'; Location='558,462'; Size='90,28'}; $ok.DialogResult = 'OK'
+ $no = Ctl Button @{Text='Cancel'; Location='654,462'; Size='84,28'}; $no.DialogResult = 'Cancel'
  $f.AcceptButton = $ok; $f.CancelButton = $no
  $f.Add_Shown({ $f.Activate(); $lb.Focus() })
- $tbK.Add_TextChanged({ $ok.Enabled = ($tbK.Text.Length -eq 0 -or $tbK.Text -match '^[A-Z0-9]{5}(-[A-Z0-9]{5}){4}$') })
+ $chk = { $k = "$($tbK.Text)".Trim(); $l = "$($cbL.Text)".Trim()
+  $ok.Enabled = (($k -eq '' -or $k -match '^[A-Z0-9]{5}(-[A-Z0-9]{5}){4}$') -and ($l -like 'Auto*' -or $l -match '^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8}){1,2}$')) }
+ $tbK.Add_TextChanged($chk); $cbL.Add_TextChanged($chk); & $chk
 
  if ($f.ShowDialog() -ne 'OK') { return '0 0 - - - - - - -' }
  $mct = $vids.Count - $lb.SelectedIndex; $pre = 1; for ($i = 0; $i -lt $rbs.Count; $i++) { if ($rbs[$i].Checked) { $pre = $i + 1 } }
