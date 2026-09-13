@@ -95,5 +95,13 @@ Loaded from the script folder before argument parsing (commandline and script na
 
 - `tests/static-check.sh` (Linux/macOS): CRLF, XML, labels, snippet markers, brace balance, https-first, and with `pwsh`
   a real parse of every embedded PowerShell snippet. All pass on this branch.
+- `tests/dialog-mock/run.ps1` (any OS with `pwsh`): executes the real `SETUP_GUI` function against a mock WinForms layer.
+  12 scenarios pass: defaults, cancel, preselection from env/ini, list + radio + key + remember, greying-out for Select and
+  MCT Defaults, key and language validation, every control inside the client area, list labels.
+- `tests/wine-cmd-check.sh` (Linux with Wine): the ini loader, version resync, elevation token builder, dynamic-update
+  substitution and the `help` block run under Wine's `cmd.exe` and pass. Wine's cmd cannot parse `&` inside a for-body or
+  after `set /a` (idioms real cmd handles and this script has used for years), so the full script cannot run there.
+- Rendering the dialog under Wine was attempted with PowerShell 7.0/7.2/7.4 Windows builds; all crash at startup on
+  64-bit-only Wine 9.0 (WineHQ bug 52396, needs wine-staging or wine32).
 - Still required on Windows before release: open the window on Windows 10 22H2 and 11 25H2 hosts, run each preset once,
   run as standard user (UAC relaunch) and as admin, `help`, `legacy`, and an ini round-trip.
