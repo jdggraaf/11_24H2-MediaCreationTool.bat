@@ -63,7 +63,7 @@ set OPTIONS=%OPTIONS% /Telemetry Disable /CompactOS Disable
 ::# comment to not unhide Enterprise for 1709+ in products.xml
 set /a UNHIDE_BUSINESS=1
 
-::# comment to not insert Enterprise esd links for 1703 or update links for 1909,2004,20H2,21H2,22H2,11_21H2,11_22H2,11_23H2,11_24H2,11_25H2 in products.xml
+::# comment to not insert Enterprise esd links for 1703 or update links for 1909,2004,20H2,21H1 in products.xml (only these have data)
 set /a INSERT_BUSINESS=1
 
 ::# MCT Version choice dialog items and default-index [11_25H2]
@@ -97,7 +97,7 @@ for %%s in (%~n0 %*) do if /i %%s equ iso set /a ISO=1
 if defined ISO set /a PRE=2 & if defined AUTO (set AUTO=)
 
 ::# parse EDITION from script name or commandline - accept one of the staged editions in MCT install.esd - see sources\product.ini
-set _=%EDITION% %~n0 %*& rem ::# also accepts the alternative names: Home, HomeN, Pro, ProN, Edu, EduN
+set "_=%EDITION% %~n0 %* "& rem ::# trailing space so a final Pro/Edu token still matches; also accepts: Home, HomeN, Pro, ProN, Edu, EduN
 for %%s in (%_:Home=Core% %_:Pro =Professional % %_:ProN=ProfessionalN% %_:Edu =Education % %_:EduN=EducationN%) do (
 for %%E in ( ProfessionalEducation ProfessionalEducationN ProfessionalWorkstation ProfessionalWorkstationN Cloud CloudN
  Core CoreN CoreSingleLanguage CoreCountrySpecific Professional ProfessionalN Education EducationN Enterprise EnterpriseN
@@ -112,7 +112,7 @@ for %%s in (%~n0 %*) do for %%A in (x86 x64) do if /i %%s equ %%A set "ARCH=%%A"
 ::# parse KEY from script name or commandline - accepts the format: AAAAA-VVVVV-EEEEE-YYYYY-OOOOO
 for %%s in (%KEY% %~n0 %*) do for /f "tokens=1-5 delims=-" %%A in ("%%s") do if "%%E" neq "" set "PKEY=%%s" & set "KEY="
 if defined PKEY set "PKEY1=%PKEY:~-1%" & set "PKEY28=%PKEY:~28,1%"
-if defined EDITION if "%PKEY1%" equ "%PKEY28%" (set "KEY=%PKEY%") else set "PKEY="
+if "%PKEY1%" equ "%PKEY28%" (set "KEY=%PKEY%") else set "PKEY="
 
 ::# parse NO_UPDATE from script name or commandline - download latest DU for sources or not
 for %%s in (%~n0 %*) do if /i %%s equ no_update set "NO_UPDATE=1"
@@ -374,7 +374,7 @@ fltmc>nul||(set A=/d /x /c set "ROOT=%ROOT%"^& start "MCT" "%~f0" %* %set%& powe
 mkdir "%WORK%\MCT" >nul 2>nul & attrib -R -S -H "%WORK%" /D & pushd "%WORK%\MCT"
 del /f /q products.* *.key EI.cfg PID.txt auto.cmd AutoUnattend.xml >nul 2>nul
 set /a latest=0 & if exist latest set /p latest=<latest
-echo;20231129>latest & if %latest% lss 20211116 del /f /q products*.* MediaCreationTool*.exe >nul 2>nul
+echo;20260913>latest & if %latest% lss 20260913 del /f /q products*.* MediaCreationTool*.exe >nul 2>nul
 
 ::# edition fallback to ones that MCT supports - after selection
 (set MEDIA_EDITION=%MEDIA_EDITION:Eval=%)
@@ -404,7 +404,7 @@ for %%s in (%MEDIA_EDITION%) do for %%K in (
 
 ::# detected / selected media preset
 if defined EDITION (set EDITION=%MEDIA_EDITION%)
-if "%MEDIA_EDITION%" neq "%OS_EDITION%" (set REG_EDITION=%MEDIA_EDITION%) else set (REG_EDITION=)
+if "%MEDIA_EDITION%" neq "%OS_EDITION%" (set "REG_EDITION=%MEDIA_EDITION%") else (set "REG_EDITION=")
 set "CONSUMER=%MEDIA_EDITION:Enterprise=%"
 if "%CONSUMER%" equ "%MEDIA_EDITION%" (set CFG=Consumer) else (set CFG=Business)
 if not defined EDITION (set UNSTAGED=1& set STAGED=) else (set UNSTAGED=& set STAGED=%MEDIA_EDITION%)
@@ -993,7 +993,7 @@ function MakeISO ($dir,$iso,$label='DVD_ROM') {if (!(test-path -Path $dir -patht
 
 ::--------------------------------------------------------------------------------------------------------------------------------
 #:FETCH_25H2_CAB:#  [INTERNAL] Fetch 25H2 CAB from Microsoft Update Metadata Service
-set ^ #=;$f0=[io.file]::ReadAllText($env:0); $0=($f0-split '#\:FETCH_25H2_CAB\:')[1]; $1=$env:1-replace'([`@$])','`$1'; iex($0+$1)
+set ^ #=;$f0=[io.file]::ReadAllText($env:0); $0=($f0-split '#\:FETCH_25H2_CAB\:' ,3)[1]; $1=$env:1-replace'([`@$])','`$1'; iex($0+$1)
 set ^ #=& set "0=%~f0"& set 1=;FETCH_25H2_CAB %*& powershell -nop -c "%#%"& exit /b %errorcode%
 function FETCH_25H2_CAB {
   [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 -bor [Net.SecurityProtocolType]::Tls13
@@ -1060,14 +1060,10 @@ function FETCH_25H2_CAB {
       DeviceAttributes = $deviceAttrs
     } | ConvertTo-Json -Compress
     
-    $headers = @{
-      "Content-Type" = "application/json"
-      "Accept" = "*/*"
-      "User-Agent" = $ua
-    }
+    $headers = @{ "Accept" = "*/*"; "User-Agent" = $ua }
     
     write-host "Querying Microsoft Update Metadata Service for 25H2 CAB..."
-    $response = Invoke-RestMethod -Uri $uri -Method Post -Headers $headers -Body $body -ErrorAction Stop -TimeoutSec 30
+    $response = Invoke-RestMethod -Uri $uri -Method Post -Headers $headers -ContentType "application/json" -Body $body -ErrorAction Stop -TimeoutSec 30
     
     $url = $null
     if ($response -and ($response -is [array])) {
@@ -1099,7 +1095,6 @@ function FETCH_25H2_CAB {
     } catch {
       $handler = [System.Net.Http.HttpClientHandler]::new()
       $handler.AllowAutoRedirect = $true
-      $handler.ServerCertificateCustomValidationCallback = { param($msg,$cert,$chain,$errors) $true }
       $client = [System.Net.Http.HttpClient]::new($handler)
       $client.DefaultRequestHeaders.UserAgent.ParseAdd($ua)
       $client.DefaultRequestHeaders.Accept.ParseAdd("*/*")
@@ -1320,7 +1315,7 @@ function PRODUCTS_XML { [xml]$xml = [io.file]::ReadAllText("$pwd\products.xml",[
      }}}
    }
  }
-#:: update existing FilePath entries for 1909, 2004, 2008 and insert entries for 21H2, 22H2, 11_21H2, 11_22H2, 11_23H2, 11_24H2 and 11_25H2
+#:: update/insert FilePath entries for the versions with CSV rows below (1703, 1909, 2004, 20H2, 21H1); newer versions have none, so this is a no-op for them
  if ($insert -and $ver -gt 15063) {
    $items = $csv |group Client,Lang -AsHashTable -AsString
    if ($null -ne $items) {
