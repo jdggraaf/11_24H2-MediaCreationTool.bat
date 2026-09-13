@@ -1,0 +1,5 @@
+https://software-download.microsoft.com/download/pr/MediaCreationTool1803.exe
+https://software-download.microsoft.com/download/pr/MediaCreationTool1809.exe
+https://wscont.apps.microsoft.com/winstore/OSUpgradeNotification/MediaCreationTool/prod/Products05242016.xml
+https://wscont.apps.microsoft.com/winstore/OSUpgradeNotification/MediaCreationTool/prod/Products09232015_2.xml
+https://wscont.apps.microsoft.com/winstore/OSUpgradeNotification/MediaCreationTool/prod/Products_20170116.cab

@@ -8,6 +8,8 @@
 :: - redesigned setup: one window for version, action and media options (edition, language, arch, key, dynamic update, extras)
 :: - MediaCreationTool.ini remembers your choices; "help" prints usage; "legacy" brings back the classic two-step dialogs
 :: - fixed: Windows 11 choices asked again after self-elevation (index cap left over from 21H2); MoSetup key path in unattend
+:: - link check: wscont.apps.microsoft.com catalogs (1507 1511 1607) and 1803 / 1809 MCT exe are gone from Microsoft -
+::   Internet Archive copies of the same files are tried second; the exe still has to pass the Authenticode check
 :: - DOWNLOAD now tries HTTPS before HTTP (closes MITM downgrade window before MCT exe runs)
 :: - MediaCreationTool exe is Authenticode-verified (Valid, Microsoft Corporation signer) before it is started
 :: - FETCH_25H2_CAB derives LcuVersion/MediaVersion from the target release build/ubr (CB), and EditionId/CompositionEditionId from %EDITION%/registry instead of unrelated hardcoded literals
@@ -256,12 +258,14 @@ goto process ::# modern windows 10 starts here with proper memory allocation, cp
 set "VER=17763" & set "VID=1809" & set "CB=17763.379.190312-0539.rs5_release_svc_refresh" & set "CT=2019/03/" & set "CC=1.3"
 set "CAB=https://download.microsoft.com/download/8/E/8/8E852CBF-0BCC-454E-BDF5-60443569617C/products_20190314.cab"
 set "EXE=https://software-download.microsoft.com/download/pr/MediaCreationTool1809.exe"
+set "EXE2=https://web.archive.org/web/20181015060756id_/https://software-download.microsoft.com/download/pr/MediaCreationTool1809.exe"
 goto process ::# rather mediocre considering it is the base for ltsc 2019; less smooth than 1803 in games; intel pre-4th-gen buggy
 
 :choice-6
 set "VER=17134" & set "VID=1803" & set "CB=17134.112.180619-1212.rs4_release_svc_refresh" & set "CT=2018/07/" & set "CC=1.2"
 set "CAB=https://download.microsoft.com/download/5/C/B/5CB83D2A-2D7E-4129-9AFE-353F8459AA8B/products_20180705.cab"
 set "EXE=https://software-download.microsoft.com/download/pr/MediaCreationTool1803.exe"
+set "EXE2=https://web.archive.org/web/20191010094141id_/https://software-download.microsoft.com/download/pr/MediaCreationTool1803.exe"
 goto process ::# update available to finally fix most standby memory issues that were present since 1703; intel pre-4th-gen buggy
 
 :choice-5
@@ -282,12 +286,14 @@ goto process ::# some gamers still find it the best despite unfixed memory alloc
 :choice-3
 set "VER=14393" & set "VID=1607" & set "CB=14393.0.161119-1705.rs1_refresh" & set "CT=2017/01/" & set "CC=1.0"
 set "CAB=https://wscont.apps.microsoft.com/winstore/OSUpgradeNotification/MediaCreationTool/prod/Products_20170116.cab"
+set "CAB2=https://web.archive.org/web/20200528095636id_/https://wscont.apps.microsoft.com/winstore/OSUpgradeNotification/MediaCreationTool/prod/Products_20170116.cab"
 set "EXE=https://download.microsoft.com/download/C/F/9/CF9862F9-3D22-4811-99E7-68CE3327DAE6/MediaCreationTool.exe"
 goto process ::# snappy and stable for legacy hardware (but with excruciantly slow windows update process)
 
 :choice-2
 set "VER=10586" & set "VID=1511" & set "CB=10586.0.160426-1409.th2_refresh" & set "CT=2016/05/" & set "CC=1.0"
 set "XML=https://wscont.apps.microsoft.com/winstore/OSUpgradeNotification/MediaCreationTool/prod/Products05242016.xml"
+set "XML2=https://web.archive.org/web/20200528095658id_/https://wscont.apps.microsoft.com/winstore/OSUpgradeNotification/MediaCreationTool/prod/Products05242016.xml"
 set "EXE=https://download.microsoft.com/download/1/C/4/1C41BC6B-F8AB-403B-B04E-C96ED6047488/MediaCreationTool.exe"
 rem 1511 MCT exe works and can select Education - using 1607 one instead anyway for unified products.xml catalog 1.0 format
 set "EXE=https://download.microsoft.com/download/C/F/9/CF9862F9-3D22-4811-99E7-68CE3327DAE6/MediaCreationTool.exe"
@@ -296,6 +302,7 @@ goto process ::# most would rather go with 1507 or 1607 instead, with little eff
 :choice-1
 set "VER=10240" & set "VID=1507" & set "CB=10240.16393.150909-1450.th1_refresh" & set "CT=2015/09/" & set "CC=1.0"
 set "XML=https://wscont.apps.microsoft.com/winstore/OSUpgradeNotification/MediaCreationTool/prod/Products09232015_2.xml"
+set "XML2=https://web.archive.org/web/20200528095729id_/https://wscont.apps.microsoft.com/winstore/OSUpgradeNotification/MediaCreationTool/prod/Products09232015_2.xml"
 set "EXE=https://download.microsoft.com/download/1/C/8/1C8BAF5C-9B7E-44FB-A90A-F58590B5DF7B/v2.0/MediaCreationToolx64.exe"
 set "EXE32=https://download.microsoft.com/download/1/C/8/1C8BAF5C-9B7E-44FB-A90A-F58590B5DF7B/v2.0/MediaCreationTool.exe"
 if /i "%PROCESSOR_ARCHITECTURE%" equ "x86" if not defined PROCESSOR_ARCHITEW6432 set "EXE=%EXE32%"
@@ -384,7 +391,7 @@ prompt $G & (<"%~f0" (set /p _=&for /l %%s in (1,1,20) do set _=& set /p _=& cal
 for /f "delims=:" %%s in ('echo;prompt $h$s$h:^|cmd /d') do set "|=%%s"&set ">>=\..\c nul&set /p s=%%s%%s%%s%%s%%s%%s%%s<nul&popd"
 set "<=pushd "%appdata%"&2>nul findstr /c:\ /a" &set ">=%>>%&echo;" &set "|=%|:~0,1%" &set /p s=\<nul>"%appdata%\c"
 ::# (un)define main variables
-for %%s in (OPTIONS MCT XML CAB EXE VID PRE AUTO ISO EDITION KEY ARCH LANGCODE NO_UPDATE DEF AKEY) do set "%%s="
+for %%s in (OPTIONS MCT XML CAB EXE XML2 CAB2 EXE2 VID PRE AUTO ISO EDITION KEY ARCH LANGCODE NO_UPDATE DEF AKEY) do set "%%s="
 for %%s in (latest_MCT.url) do if not exist %%s (echo;[InternetShortcut]&echo;URL=github.com/AveYo/MediaCreationTool.bat)>%%s
 goto Universal MCT
 
@@ -470,6 +477,10 @@ if defined XML if exist "%XML%" (echo;%XML% & copy /y "%XML%" products.xml >nul 
 if defined CAB (
   if "%CAB%" equ "FETCH_25H2" (echo;Fetching 25H2 CAB from Microsoft & call :FETCH_25H2_CAB) else (echo;%CAB% & call :DOWNLOAD "%CAB%" products%VID%.cab)
 )
+::# *2 = Internet Archive copy of the original Microsoft file, used only when the Microsoft url is gone (1507 1511 1607 1803 1809)
+if defined EXE2 if not exist MediaCreationTool%VID%.exe echo;%EXE2% & call :DOWNLOAD "%EXE2%" MediaCreationTool%VID%.exe
+if defined XML2 if not exist products%VID%.xml echo;%XML2% & call :DOWNLOAD "%XML2%" products%VID%.xml
+if defined CAB2 if not exist products%VID%.cab echo;%CAB2% & call :DOWNLOAD "%CAB2%" products%VID%.cab
 if exist products%VID%.xml copy /y products%VID%.xml products.xml >nul 2>nul
 if exist products%VID%.cab expand.exe -R products%VID%.cab -F:* . >nul 2>nul
 if exist products%VID%.cab del /f /q products%VID%.cab >nul 2>nul
