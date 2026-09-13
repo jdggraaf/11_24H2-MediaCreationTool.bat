@@ -1,0 +1,7 @@
+# SHA256 of the Internet Archive copies referenced by MediaCreationTool.bat (1507 1511 1607 catalogs, 1803 1809 MCT exe)
+# downloaded 2026-09-13; the exe files carry Microsoft Corporation Authenticode signatures (timestamped Apr/Sep 2018)
+aa8b68133931e76ca58944641084943c60e0954bd6c829bd9c670284da071ca4  MediaCreationTool1803.exe
+5778c2b02360922a88fe4bd1c24eea532726d04e3e8cabd656197ecdd64d6036  MediaCreationTool1809.exe
+66329703276a534128a0dbcf5ad841e70c6a052704d31727314f991e6781d8b8  Products_20170116.cab
+e26a171cf227f85cb3285c2ddc41372a48f86596da08438b1c2f550e39d7e8aa  Products05242016.xml
+8f58a2e0d838521e739e9908728af2a2b3659f19090f24e482bb3ba68d98d39f  Products09232015_2.xml
