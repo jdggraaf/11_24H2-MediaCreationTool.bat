@@ -8,6 +8,8 @@
 :: - redesigned setup: one window for version, action and media options (edition, language, arch, key, dynamic update, extras)
 :: - MediaCreationTool.ini remembers your choices; "help" prints usage; "legacy" brings back the classic two-step dialogs
 :: - fixed: Windows 11 choices asked again after self-elevation (index cap left over from 21H2); MoSetup key path in unattend
+:: - bypass refresh: LabConfig moved into the windowsPE pass of the boot.wim unattend (was specialize = too late);
+::   auto.cmd sets HwReqChkVars + clears AppCompatFlags markers for 24H2+ upgrades (0-byte appraiserres.dll stopped working in 24H2)
 :: - link check: Microsoft removed the 1507 / 1511 / 1607 catalogs and the 1803 / 1809 MCT exe, so those five versions are gone;
 ::   the list now starts at 1703 (14 versions)
 :: - DOWNLOAD now tries HTTPS before HTTP (closes MITM downgrade window before MCT exe runs)
@@ -676,8 +678,8 @@ EXIT
    write-host " ERROR! " -fore Red -nonew; write-host "setup terminated unexpectedly`r`n"; sleep 7; return
  } 
 
-#:: back to classic 0-byte skip 11 upgrade checks as it still works in release - and people keep nagging about Server label
- if ($env:VER -ge 22000) {
+#:: classic 0-byte skip 11 upgrade checks for 21H2 - 23H2 media; 24H2+ no longer looks at appraiserres.dll (auto.cmd handles it)
+ if ($env:VER -ge 22000 -and $env:VER -lt 26100) {
    cmd /d /x /c "cd.>""$DIR\sources\appraiserres.dll"""
  }
 
@@ -738,7 +740,7 @@ pushd "%dir%sources" || (echo "%dir%sources" not found! script should be run fro
 ::# start sources\setup if under winpe (when booted from media) [Shift] + [F10]: c:\auto or d:\auto or e:\auto etc.
 reg query "HKLM\Software\Microsoft\Windows NT\CurrentVersion\WinPE">nul 2>nul && (
  for %%s in (sCPU sRAM sSecureBoot sStorage sTPM) do reg add HKLM\SYSTEM\Setup\LabConfig /f /v Bypas%%sCheck /d 1 /t reg_dword
- reg add HKLM\SYSTEM\Setup /f /v HwReqChk /d 1 /t reg_dword
+ reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\AppCompatFlags\HwReqChk" /f /v HwReqChkVars /t reg_multi_sz /s , /d "SQ_SecureBootCapable=TRUE,SQ_SecureBootEnabled=TRUE,SQ_TpmVersion=2,SQ_RamMB=8192"
  start "WinPE" sources\setup.exe & exit /b 
 ) 
 
@@ -824,6 +826,11 @@ if "%Build%" gtr "15063" (set OPTIONS=%OPTIONS% /UpdateMedia Decline)
 ::# skip windows 11 upgrade checks: add launch option trick if old-style 0-byte file trick is not on the media  
 if "%Build%" lss "22000" set /a SKIP_11_SETUP_CHECKS=0
 reg add HKLM\SYSTEM\Setup\MoSetup /f /v AllowUpgradesWithUnsupportedTPMorCPU /d 1 /t reg_dword >nul 2>nul &rem ::# TPM 1.2+ only
+::# 24H2+ asks hwreqchk.dll and cached appraiser markers instead of appraiserres.dll - answer for it and clear the cache (rufus 4.6+ way)
+reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\AppCompatFlags\HwReqChk" /f /v HwReqChkVars /t reg_multi_sz /s , /d "SQ_SecureBootCapable=TRUE,SQ_SecureBootEnabled=TRUE,SQ_TpmVersion=2,SQ_RamMB=8192" >nul 2>nul
+for %%k in (CompatMarkers Shared TargetVersionUpgradeExperienceIndicators) do reg delete "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\AppCompatFlags\%%k" /f >nul 2>nul
+::# 0-byte appraiserres.dll and the /Product Server label are 21H2 - 23H2 tricks: 24H2+ ignores the first, the second greys out keep files
+if "%Build%" geq "26100" set /a SKIP_11_SETUP_CHECKS=0
 if "%SKIP_11_SETUP_CHECKS%" equ "1" cd.>appraiserres.dll 2>nul & rem ::# writable media only
 for %%A in (appraiserres.dll) do if %%~zA gtr 0 (set TRICK=/Product Server ) else (set TRICK=)
 if "%SKIP_11_SETUP_CHECKS%" equ "1" (set OPTIONS=%TRICK%%OPTIONS%)
@@ -888,6 +895,27 @@ function WIM_INFO ($file = 'install.esd', $index = 0, $out = 0) { :info while ($
     <UserData><ProductKey><Key>AAAAA-VVVVV-EEEEE-YYYYY-OOOOO</Key><WillShowUI>OnError</WillShowUI></ProductKey></UserData>
     <ComplianceCheck><DisplayReport>Never</DisplayReport></ComplianceCheck><Diagnostics><OptIn>false</OptIn></Diagnostics>
     <DynamicUpdate><Enable>true</Enable><WillShowUI>Never</WillShowUI></DynamicUpdate><EnableNetwork>true</EnableNetwork>
+    <!-- hardware requirement bypass must run in the windowsPE pass, before setup's compatibility check (same as rufus) -->
+    <RunSynchronous>
+      <RunSynchronousCommand wcm:action="add"><Order>1</Order>
+        <Path>reg add HKLM\SYSTEM\Setup\LabConfig /v BypassTPMCheck /t reg_dword /d 1 /f</Path>
+      </RunSynchronousCommand>
+      <RunSynchronousCommand wcm:action="add"><Order>2</Order>
+        <Path>reg add HKLM\SYSTEM\Setup\LabConfig /v BypassSecureBootCheck /t reg_dword /d 1 /f</Path>
+      </RunSynchronousCommand>
+      <RunSynchronousCommand wcm:action="add"><Order>3</Order>
+        <Path>reg add HKLM\SYSTEM\Setup\LabConfig /v BypassRAMCheck /t reg_dword /d 1 /f</Path>
+      </RunSynchronousCommand>
+      <RunSynchronousCommand wcm:action="add"><Order>4</Order>
+        <Path>reg add HKLM\SYSTEM\Setup\LabConfig /v BypassCPUCheck /t reg_dword /d 1 /f</Path>
+      </RunSynchronousCommand>
+      <RunSynchronousCommand wcm:action="add"><Order>5</Order>
+        <Path>reg add HKLM\SYSTEM\Setup\LabConfig /v BypassStorageCheck /t reg_dword /d 1 /f</Path>
+      </RunSynchronousCommand>
+      <RunSynchronousCommand wcm:action="add"><Order>6</Order>
+        <Path>reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\AppCompatFlags\HwReqChk" /f /v HwReqChkVars /t reg_multi_sz /s , /d "SQ_SecureBootCapable=TRUE,SQ_SecureBootEnabled=TRUE,SQ_TpmVersion=2,SQ_RamMB=8192"</Path>
+      </RunSynchronousCommand>
+    </RunSynchronous>
   </component></settings>  
   <settings pass="specialize"><component name="Microsoft-Windows-Deployment" processorArchitecture="amd64" language="neutral"
    xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
@@ -907,29 +935,12 @@ function WIM_INFO ($file = 'install.esd', $index = 0, $out = 0) { :info while ($
       <RunSynchronousCommand wcm:action="add"><Order>4</Order>
         <Path>reg add HKLM\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate /v ProductVersion /d "Windows 11" /t reg_sz /f</Path>
       </RunSynchronousCommand>
-      <!-- TPM and hardware requirement bypass for WinPE and upgrade scenarios -->
+      <!-- lets the installed system take future feature updates on unsupported TPM / CPU -->
       <RunSynchronousCommand wcm:action="add"><Order>5</Order>
-        <Path>reg add HKLM\SYSTEM\Setup /v HwReqChk /t reg_dword /d 1 /f</Path>
-      </RunSynchronousCommand>
-      <!-- LabConfig registry bypasses for hardware checks -->
-      <RunSynchronousCommand wcm:action="add"><Order>6</Order>
-        <Path>reg add HKLM\SYSTEM\Setup\LabConfig /v BypassTPMCheck /t reg_dword /d 1 /f</Path>
-      </RunSynchronousCommand>
-      <RunSynchronousCommand wcm:action="add"><Order>7</Order>
-        <Path>reg add HKLM\SYSTEM\Setup\LabConfig /v BypassSecureBootCheck /t reg_dword /d 1 /f</Path>
-      </RunSynchronousCommand>
-      <RunSynchronousCommand wcm:action="add"><Order>8</Order>
-        <Path>reg add HKLM\SYSTEM\Setup\LabConfig /v BypassRAMCheck /t reg_dword /d 1 /f</Path>
-      </RunSynchronousCommand>
-      <RunSynchronousCommand wcm:action="add"><Order>9</Order>
-        <Path>reg add HKLM\SYSTEM\Setup\LabConfig /v BypassCPUCheck /t reg_dword /d 1 /f</Path>
-      </RunSynchronousCommand>
-      <RunSynchronousCommand wcm:action="add"><Order>10</Order>
-        <Path>reg add HKLM\SYSTEM\Setup\LabConfig /v BypassStorageCheck /t reg_dword /d 1 /f</Path>
-      </RunSynchronousCommand>
-      <!-- MoSetup bypass for upgrade scenarios with unsupported TPM or CPU -->
-      <RunSynchronousCommand wcm:action="add"><Order>11</Order>
         <Path>reg add HKLM\SYSTEM\Setup\MoSetup /v AllowUpgradesWithUnsupportedTPMorCPU /t reg_dword /d 1 /f</Path>
+      </RunSynchronousCommand>
+      <RunSynchronousCommand wcm:action="add"><Order>6</Order>
+        <Path>reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\AppCompatFlags\HwReqChk" /f /v HwReqChkVars /t reg_multi_sz /s , /d "SQ_SecureBootCapable=TRUE,SQ_SecureBootEnabled=TRUE,SQ_TpmVersion=2,SQ_RamMB=8192"</Path>
       </RunSynchronousCommand>
     </RunSynchronous>
   </component></settings>

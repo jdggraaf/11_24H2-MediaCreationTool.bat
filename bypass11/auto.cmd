@@ -96,6 +96,11 @@ if "%Build%" gtr "15063" (set OPTIONS=%OPTIONS% /UpdateMedia Decline)
 ::# skip windows 11 upgrade checks: add launch option trick if old-style 0-byte file trick is not on the media  
 if "%Build%" lss "22000" set /a SKIP_11_SETUP_CHECKS=0
 reg add HKLM\SYSTEM\Setup\MoSetup /f /v AllowUpgradesWithUnsupportedTPMorCPU /d 1 /t reg_dword >nul 2>nul &rem ::# TPM 1.2+ only
+::# 24H2+ asks hwreqchk.dll and cached appraiser markers instead of appraiserres.dll - answer for it and clear the cache (rufus 4.6+ way)
+reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\AppCompatFlags\HwReqChk" /f /v HwReqChkVars /t reg_multi_sz /s , /d "SQ_SecureBootCapable=TRUE,SQ_SecureBootEnabled=TRUE,SQ_TpmVersion=2,SQ_RamMB=8192" >nul 2>nul
+for %%k in (CompatMarkers Shared TargetVersionUpgradeExperienceIndicators) do reg delete "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\AppCompatFlags\%%k" /f >nul 2>nul
+::# 0-byte appraiserres.dll and the /Product Server label are 21H2 - 23H2 tricks: 24H2+ ignores the first, the second greys out keep files
+if "%Build%" geq "26100" set /a SKIP_11_SETUP_CHECKS=0
 if "%SKIP_11_SETUP_CHECKS%" equ "1" cd.>appraiserres.dll 2>nul & rem ::# writable media only
 for %%A in (appraiserres.dll) do if %%~zA gtr 0 (set TRICK=/Product Server ) else (set TRICK=)
 if "%SKIP_11_SETUP_CHECKS%" equ "1" (set OPTIONS=%TRICK%%OPTIONS%)

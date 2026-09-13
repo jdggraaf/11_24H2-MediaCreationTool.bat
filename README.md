@@ -5,11 +5,11 @@ A powerful yet simple windows 10 / 11 deployment automation tool as well!
 
 **25H2 CAB Fetch** — Dynamically fetch 25H2 media metadata directly from Microsoft's Update Metadata Service, with automatic country/language detection via `LANGCODE`
 
-**TPM Bypass Enhancements** — Comprehensive hardware requirement spoofing for WinPE and upgrade scenarios:
-- `HwReqChk` registry key for spoofing hardware capabilities
-- LabConfig registry bypasses: `BypassTPMCheck`, `BypassSecureBootCheck`, `BypassRAMCheck`, `BypassCPUCheck`, `BypassStorageCheck`
-- `AllowUpgradesWithUnsupportedTPMorCPU` for MoSetup upgrade scenarios
-- Maintains existing appraiserres.dll and winsetup.dll bypass mechanisms
+**Requirement bypass (checked September 2026)** — the same mechanisms Rufus 4.6+ uses:
+- clean install from the ISO/USB: LabConfig `BypassTPMCheck` `BypassSecureBootCheck` `BypassRAMCheck` `BypassCPUCheck` `BypassStorageCheck` set in the windowsPE pass of the boot.wim unattend
+- in-place upgrade (auto.cmd): `AllowUpgradesWithUnsupportedTPMorCPU`, the `HwReqChkVars` answers (TPM 2, Secure Boot, 8 GB) and cleared AppCompatFlags markers - keeps files and apps on 24H2 / 25H2
+- 21H2 - 23H2 media still get the classic 0-byte `appraiserres.dll`; 24H2+ ignores it, so it is no longer relied on
+- no bypass exists for CPUs without SSE4.2 / POPCNT (hard requirement since 24H2) - such PCs stay on Windows 10 or 23H2
 
 Setup window  
 ------------  
@@ -164,6 +164,7 @@ _We did it! We broke [the previous gist](https://git.io/MediaCreationTool.bat)_ 
             25H2 dynamic CAB fetch from FE3 (respects LANGCODE for country detection)
             all issues ironed out; upgrade keeping files from Eval editions too; pickup $ISO$ dir content to add on media
             DU in 11: auto installs 22000.556 atm; older skip_11_checks, without Server label; Home offline local account
+2026.09.13: bypass refresh - LabConfig now in the windowsPE pass; auto.cmd uses HwReqChkVars + AppCompatFlags cleanup for 24H2+ (0-byte appraiserres.dll stopped working in 24H2)
 2026.09.13: link check - Microsoft removed the 1507/1511/1607 catalogs (wscont.apps.microsoft.com is gone) and the 1803/1809 MCT exe, so those five versions are dropped; the list now starts at 1703
 2026.09.12: redesigned setup window (version + action + media options in one), MediaCreationTool.ini, help, legacy; fixed 11 choices asking again after elevation and the MoSetup key path in unattend
 2026.09.12: HTTPS-first downloads - HTTP fallback no longer tried before HTTPS
