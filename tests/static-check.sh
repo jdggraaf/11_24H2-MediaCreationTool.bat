@@ -62,9 +62,15 @@ if [ -n "$PWSH" ]; then
       if (\$e) { \$e | % { \"  \$(\$_.Extent.StartLineNumber): \$(\$_.Message)\" }; exit 1 }" \
       && say "ok   pwsh parse $n" || bad "PowerShell parse error in snippet $n"
   done
+  # 9. Run the real SETUP_GUI function against a mock WinForms layer: selection maths, validation, greying-out, output line.
+  "$PWSH" -NoProfile -File tests/dialog-mock/run.ps1 MediaCreationTool.bat > /tmp/dialog-mock.out 2>&1 \
+    && say "ok   dialog logic ($(grep -c '^ok' /tmp/dialog-mock.out) scenarios)" || { cat /tmp/dialog-mock.out; bad "dialog logic scenarios failed"; }
 else
-  say "skip pwsh parse (pwsh not found; set PWSH=/path/to/pwsh)"
+  say "skip pwsh parse + dialog logic (pwsh not found; set PWSH=/path/to/pwsh)"
 fi
+
+# 10. Batch pieces under Wine cmd.exe when available (best effort).
+bash tests/wine-cmd-check.sh || bad "wine cmd checks failed"
 
 [ $fail -eq 0 ] && say "ALL CHECKS PASSED" || say "SOME CHECKS FAILED"
 exit $fail
