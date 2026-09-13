@@ -38,15 +38,16 @@ Behaviour (WinForms dialogs, MCT, setup) can only be tested on Windows.
 `MediaCreationTool.bat` picks the OS version/edition to fetch through a small,
 hand-curated table:
 
-- `set VERSIONS=1507,1511,1607,...,11_24H2,11_25H2` (around line 59) lists every
-  supported version string, in order, and `set /a dV=19` sets the dialog's
+- `set VERSIONS=1703,1709,1903,...,11_24H2,11_25H2` (around line 59) lists every
+  supported version string, in order, and `set /a dV=14` sets the dialog's
   default selection index into that same list.
 - Each version has a matching `:choice-N` label further down the script (around
-  lines 149-260), where `N` is the 1-based position of that version in
-  `VERSIONS` - e.g. `VERSIONS` item 19 is `11_25H2`, and `:choice-19` sets
-  `VER`, `VID`, `CB`, `CT`, `CC`, `CAB` and `EXE` for 11 25H2; item 3 is `1607`
-  and `:choice-3` configures that release, and so on down to item 1 (`1507`,
-  `:choice-1`).
+  lines 149-270), where `N` is the 1-based position of that version in
+  `VERSIONS` - e.g. `VERSIONS` item 14 is `11_25H2`, and `:choice-14` sets
+  `VER`, `VID`, `CB`, `CT`, `CC`, `CAB` and `EXE` for 11 25H2; item 3 is `1903`
+  and `:choice-3` configures that release, and so on down to item 1 (`1703`,
+  `:choice-1`). Versions whose Microsoft downloads disappeared (1507-1607,
+  1803, 1809) were removed in September 2026 rather than pointed elsewhere.
 - Adding a new release means appending its name to `VERSIONS`, bumping `dV` if
   it should be the new default, and adding a new `:choice-N` block (copied from
   the previous newest one) with that release's `VER`/`VID`/`CB`/`CT`/`CC`/

@@ -16,7 +16,7 @@ ini=L[find('MediaCreationTool.ini") do if not defined')]; vid=L[find('for /f "to
 tok=L[find('set "GUI_TOKENS=" & for %%s in')]; sub=L[find('if defined GUI_NO_UPDATE if')]
 open(f'{T}/MediaCreationTool.ini','wb').write(b'MCT=11_25H2\r\nEDITION=Pro\r\nNO_UPDATE=1\r\n; comment\r\n')
 open(f'{T}/t1.bat','wb').write(crlf(['@echo off',ini,'echo MCT=%MCT% EDITION=%EDITION% NO_UPDATE=%NO_UPDATE%',
- 'set VERSIONS=1507,1511,11_25H2&set MCT=3',vid,'echo VID=%VID%',
+ 'set VERSIONS=1703,1709,11_25H2&set MCT=3',vid,'echo VID=%VID%',
  'set GUI_EDITION=Enterprise&set GUI_LANGCODE=de-DE&set GUI_ARCH=-&set GUI_KEY=-&set GUI_NO_UPDATE=no_update&set GUI_DEF=-',tok,'echo TOKENS=[%GUI_TOKENS%]',
  'set OPTIONS=/Compat IgnoreWarning /DynamicUpdate Enable',sub,'echo OPTIONS=%OPTIONS%']))
 i=find(':help'); j=next(k for k in range(i,len(L)) if L[k].startswith('pause'))

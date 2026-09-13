@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
 # Probes every URL referenced by MediaCreationTool.bat with a 1 KB ranged GET. Prints a status table; exits 1 on any failure.
-# web.archive.org URLs (1507 1511 1607 catalogs, 1803 1809 exe - the Microsoft originals are gone) are probed too.
 cd "$(dirname "$0")/.."
 fail=0
 while read -r u; do
