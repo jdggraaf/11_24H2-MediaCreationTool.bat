@@ -164,7 +164,7 @@ _We did it! We broke [the previous gist](https://git.io/MediaCreationTool.bat)_ 
             25H2 dynamic CAB fetch from FE3 (respects LANGCODE for country detection)
             all issues ironed out; upgrade keeping files from Eval editions too; pickup $ISO$ dir content to add on media
             DU in 11: auto installs 22000.556 atm; older skip_11_checks, without Server label; Home offline local account
-2026.09.13: bypass refresh - LabConfig now in the windowsPE pass; auto.cmd uses HwReqChkVars + AppCompatFlags cleanup for 24H2+ (0-byte appraiserres.dll stopped working in 24H2)
+2026.09.13: bypass refresh - LabConfig now in the windowsPE pass; auto.cmd uses HwReqChkVars + AppCompatFlags cleanup for 24H2+ (0-byte appraiserres.dll stopped working in 24H2); bypass11 Skip_TPM_Check V14 does the same for Windows Update / mounted ISO upgrades
 2026.09.13: link check - Microsoft removed the 1507/1511/1607 catalogs (wscont.apps.microsoft.com is gone) and the 1803/1809 MCT exe, so those five versions are dropped; the list now starts at 1703
 2026.09.12: redesigned setup window (version + action + media options in one), MediaCreationTool.ini, help, legacy; fixed 11 choices asking again after elevation and the MoSetup key path in unattend
 2026.09.12: HTTPS-first downloads - HTTP fallback no longer tried before HTTPS

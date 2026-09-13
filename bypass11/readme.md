@@ -2,7 +2,7 @@ Get 11 on 'unsupported' PC via Windows Update or mounted ISO (no patching needed
 ---------------------------------------------------------------------------------  
 Step 1: use [Skip_TPM_Check_on_Dynamic_Update.cmd](Skip_TPM_Check_on_Dynamic_Update.cmd) to automatically bypass setup requirements  
 _It's a set it and forget it script, with built-in undo, using more reliable /Product Server trick_  
-_rebased on cmd due to defender transgression; skips already patched media (0b) - self-identifies as V13, 2023.12.07_  
+_rebased on cmd due to defender transgression; skips already patched media (0b) - self-identifies as V14, 2026.09.13 - adds the 24H2+ HwReqChkVars answers and clears cached appraiser markers, same as rufus 4.6+_  
 
 Step 2: use [OfflineInsiderEnroll](https://github.com/abbodi1406/offlineinsiderenroll) to subscribe to the channel you want  
 _while on 10, use BETA for Windows 11 22000.x builds (release), DEV for Windows 11 225xx.x builds (experimental)_  

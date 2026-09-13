@@ -3,8 +3,9 @@
 ::# Get 11 on 'unsupported' PC via Windows Update or mounted ISO (no patching needed)
 ::# if WU is stuck use windows_update_refresh.bat; Beta/Dev/Canary needs OfflineInsiderEnroll
 ::# V13: skip 2nd tpm check on Canary iso; no Server label; future proofing; tested with 26010 iso, wu and wu repair version
+::# V14: 24H2+ answers hwreqchk (HwReqChkVars: tpm 2, secure boot, 8gb) and clears cached appraiser markers - rufus 4.6+ way
 
-@echo off & title get 11 on 'unsupported' PC || AveYo 2023.12.07
+@echo off & title get 11 on 'unsupported' PC || AveYo 2023.12.07, V14 2026.09.13
 if /i "%~f0" neq "%SystemDrive%\Scripts\get11.cmd" goto setup
 powershell -win 1 -nop -c ";"
 set CLI=%*& set SOURCES=%SystemDrive%\$WINDOWS.~BT\Sources& set MEDIA=.& set MOD=CLI& set PRE=WUA& set /a VER=11
@@ -12,6 +13,8 @@ if not defined CLI (exit /b) else if not exist %SOURCES%\SetupHost.exe (exit /b)
 if not exist %SOURCES%\WindowsUpdateBox.exe mklink /h %SOURCES%\WindowsUpdateBox.exe %SOURCES%\SetupHost.exe
 reg add HKLM\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate /f /v DisableWUfBSafeguards /d 1 /t reg_dword
 reg add HKLM\SYSTEM\Setup\MoSetup /f /v AllowUpgradesWithUnsupportedTPMorCPU /d 1 /t reg_dword
+reg add "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\AppCompatFlags\HwReqChk" /f /v HwReqChkVars /t reg_multi_sz /s , /d "SQ_SecureBootCapable=TRUE,SQ_SecureBootEnabled=TRUE,SQ_TpmVersion=2,SQ_RamMB=8192"
+for %%k in (CompatMarkers Shared TargetVersionUpgradeExperienceIndicators) do reg delete "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\AppCompatFlags\%%k" /f >nul 2>nul
 set OPT=/Compat IgnoreWarning /MigrateDrivers All /Telemetry Disable
 set /a restart_application=0x800705BB & (call set CLI=%%CLI:%1 =%%)
 set /a incorrect_parameter=0x80070057 & (set SRV=%CLI:/Product Client =%)
@@ -63,7 +66,7 @@ reg add "%IFEO%\SetupHost.exe" /f /v UseFilter /d 1 /t reg_dword >nul
 reg add "%IFEO%\SetupHost.exe\0" /f /v FilterFullPath /d "%SystemDrive%\$WINDOWS.~BT\Sources\SetupHost.exe" >nul
 reg add "%IFEO%\SetupHost.exe\0" /f /v Debugger /d "%SystemDrive%\Scripts\get11.cmd" >nul
 echo;
-%<%:f0 " Skip TPM Check on Dynamic Update V13 "%>>% & %<%:2f " INSTALLED "%>>% & %<%:f0 " run again to remove "%>%
+%<%:f0 " Skip TPM Check on Dynamic Update V14 "%>>% & %<%:2f " INSTALLED "%>>% & %<%:f0 " run again to remove "%>%
 if /i "%CLI%"=="" timeout /t 7
 exit /b
 
@@ -71,7 +74,7 @@ exit /b
 del /f /q "%SystemDrive%\Scripts\get11.cmd" "%Public%\get11.cmd" "%ProgramData%\get11.cmd" >nul 2>nul
 reg delete "%IFEO%\SetupHost.exe" /f >nul 2>nul
 echo;
-%<%:f0 " Skip TPM Check on Dynamic Update V13 "%>>% & %<%:df " REMOVED "%>>% & %<%:f0 " run again to install "%>%
+%<%:f0 " Skip TPM Check on Dynamic Update V14 "%>>% & %<%:df " REMOVED "%>>% & %<%:f0 " run again to install "%>%
 if /i "%CLI%"=="" timeout /t 7
 exit /b
 
