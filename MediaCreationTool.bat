@@ -1014,11 +1014,10 @@ function FETCH_25H2_CAB {
       if ($parts.Length -ge 2 -and $parts[1].Length -ge 2) { $country = $parts[1].Substring(0,2).ToUpperInvariant() }
       else { $country = ([System.Globalization.RegionInfo] $lc).TwoLetterISORegionName }
     } catch { $country = ([System.Globalization.RegionInfo] (Get-Culture).Name).TwoLetterISORegionName }
-    # OSVersion baseline stays fixed known-good for 26100 target; LcuVersion/MediaVersion
-    # derive from the target release CB (build.ubr of the media being requested), else the
-    # host registry build/ubr, else the literal fallback
-    
-    $targetVersion = "26100.0.0.0"
+    # the FE3 query returns the current Windows.Products.Cab for whatever DeviceAttributes context is sent;
+    # V is a minimum-version floor, not an exact selector (a 26100 or 26200 floor both return the current 25H2
+    # catalog, older floors like 22631 return nothing) - so derive the floor from the target build in CB
+    if ("$env:CB" -match '^(\d+)\.') { $targetVersion = "$($matches[1]).0.0.0" } else { $targetVersion = "26100.0.0.0" }
     $branch = "br_release"
     $previewBuilds = 1
     $attrDataVer = 338
@@ -1065,20 +1064,14 @@ function FETCH_25H2_CAB {
     write-host "Querying Microsoft Update Metadata Service for 25H2 CAB..."
     $response = Invoke-RestMethod -Uri $uri -Method Post -Headers $headers -ContentType "application/json" -Body $body -ErrorAction Stop -TimeoutSec 30
     
-    $url = $null
+    $loc = $null
     if ($response -and ($response -is [array])) {
-      if ($response.Count -gt 0 -and $response[0].FileLocations) {
-        $url = $response[0].FileLocations[0].Url
-      }
+      if ($response.Count -gt 0 -and $response[0].FileLocations) { $loc = $response[0].FileLocations[0] }
     } elseif ($response -and ($response -is [object])) {
-      if ($response.FileLocations) {
-        $url = $response.FileLocations[0].Url
-      } elseif ($response.Updates -and $response.Updates.Count -gt 0) {
-        if ($response.Updates[0].FileLocations) {
-          $url = $response.Updates[0].FileLocations[0].Url
-        }
-      }
+      if ($response.FileLocations) { $loc = $response.FileLocations[0] }
+      elseif ($response.Updates -and $response.Updates.Count -gt 0 -and $response.Updates[0].FileLocations) { $loc = $response.Updates[0].FileLocations[0] }
     }
+    $url = if ($loc) { $loc.Url } else { $null }
     
     if ($url) {
       write-host "Resolved signed URL from Microsoft Update Service"
@@ -1105,7 +1098,13 @@ function FETCH_25H2_CAB {
       write-host "Downloaded CAB to $output (Size: $([math]::Round($size/1MB, 2)) MB)"
     }
 
-    
+    #:: the download url is http-only (the CDN cert does not cover its hostname), so verify the cab against the
+    #:: base64 SHA256 digest the metadata service returned - this is the integrity check for the fetched catalog
+    if ($loc.Digest) {
+      $sha = [Convert]::ToBase64String([Security.Cryptography.SHA256]::Create().ComputeHash([io.file]::ReadAllBytes($output)))
+      if ($sha -ne $loc.Digest) { write-host -fore Red "CAB hash mismatch - discarding"; del $output -force -ea 0; return 1 }
+      write-host -fore Green "CAB verified against Microsoft catalog digest (SHA256)"
+    }
     return 0
   } catch {
     write-host -fore Red "Error: $_"
